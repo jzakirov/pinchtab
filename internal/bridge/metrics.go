@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/chromedp/cdproto/performance"
+	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
 )
 
@@ -37,14 +38,18 @@ func (b *Bridge) GetBrowserMemoryMetrics() (*MemoryMetrics, error) {
 
 // GetAggregatedMemoryMetrics returns summed memory metrics across all open tabs
 func (b *Bridge) GetAggregatedMemoryMetrics() (*MemoryMetrics, error) {
-	tabIDs := b.AccessedTabIDs()
-	if len(tabIDs) == 0 {
-		return &MemoryMetrics{}, nil
+	targets, err := b.ListTargets()
+	if err != nil {
+		return nil, err
 	}
 
 	total := &MemoryMetrics{}
-	for tabID := range tabIDs {
-		mem, err := b.GetMemoryMetrics(tabID)
+	for _, t := range targets {
+		if t.Type != "page" {
+			continue
+		}
+		// Get metrics directly from target context
+		mem, err := b.getMetricsForTarget(string(t.TargetID))
 		if err != nil || mem == nil {
 			continue
 		}
@@ -56,6 +61,13 @@ func (b *Bridge) GetAggregatedMemoryMetrics() (*MemoryMetrics, error) {
 		total.Listeners += mem.Listeners
 	}
 	return total, nil
+}
+
+// getMetricsForTarget gets metrics for a raw CDP target ID
+func (b *Bridge) getMetricsForTarget(targetID string) (*MemoryMetrics, error) {
+	ctx, cancel := chromedp.NewContext(b.BrowserCtx, chromedp.WithTargetID(target.ID(targetID)))
+	defer cancel()
+	return getMetricsFromContext(ctx)
 }
 
 func getMetricsFromContext(ctx context.Context) (*MemoryMetrics, error) {
