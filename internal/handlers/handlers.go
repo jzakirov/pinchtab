@@ -47,6 +47,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 	mux.HandleFunc("POST /tabs/{id}/actions", h.HandleTabActions)
 	mux.HandleFunc("GET /tabs/{id}/text", h.HandleTabText)
 	mux.HandleFunc("POST /tabs/{id}/evaluate", h.HandleTabEvaluate)
+	mux.HandleFunc("GET /tabs/{id}/metrics", h.HandleTabMetrics)
 	mux.HandleFunc("GET /metrics", h.HandleMetrics)
 	mux.HandleFunc("GET /snapshot", h.HandleSnapshot)
 	mux.HandleFunc("GET /screenshot", h.HandleScreenshot)

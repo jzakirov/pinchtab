@@ -4,6 +4,7 @@ import type { Instance } from "../../generated/types";
 interface Props {
   instance: Instance;
   tabCount: number;
+  memoryMB?: number;
   selected: boolean;
   onClick: () => void;
 }
@@ -11,6 +12,7 @@ interface Props {
 export default function InstanceListItem({
   instance,
   tabCount,
+  memoryMB,
   selected,
   onClick,
 }: Props) {
@@ -44,6 +46,7 @@ export default function InstanceListItem({
         </div>
         <div className="text-xs text-text-muted">
           :{instance.port} · {tabCount} tabs
+          {memoryMB !== undefined && ` · ${memoryMB.toFixed(0)}MB`}
         </div>
       </div>
       <Badge variant={badgeVariant}>{instance.status}</Badge>

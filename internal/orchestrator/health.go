@@ -129,6 +129,19 @@ type remoteTab struct {
 	Title string `json:"title"`
 }
 
+type remoteMetrics struct {
+	Memory *memoryMetrics `json:"memory,omitempty"`
+}
+
+type memoryMetrics struct {
+	JSHeapUsedMB  float64 `json:"jsHeapUsedMB"`
+	JSHeapTotalMB float64 `json:"jsHeapTotalMB"`
+	Documents     int64   `json:"documents"`
+	Frames        int64   `json:"frames"`
+	Nodes         int64   `json:"nodes"`
+	Listeners     int64   `json:"listeners"`
+}
+
 func (o *Orchestrator) fetchTabs(baseURL string) ([]remoteTab, error) {
 	req, err := http.NewRequest(http.MethodGet, baseURL+"/screencast/tabs", nil)
 	if err != nil {
@@ -149,6 +162,32 @@ func (o *Orchestrator) fetchTabs(baseURL string) ([]remoteTab, error) {
 		return nil, err
 	}
 	return tabs, nil
+}
+
+func (o *Orchestrator) fetchMetrics(baseURL string) (*memoryMetrics, error) {
+	req, err := http.NewRequest(http.MethodGet, baseURL+"/metrics", nil)
+	if err != nil {
+		return nil, err
+	}
+	if o.childAuthToken != "" {
+		req.Header.Set("Authorization", "Bearer "+o.childAuthToken)
+	}
+
+	resp, err := o.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != 200 {
+		return nil, nil
+	}
+
+	var result remoteMetrics
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	return result.Memory, nil
 }
 
 func isInstanceHealthyStatus(code int) bool {

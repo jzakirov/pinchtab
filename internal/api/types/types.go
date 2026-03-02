@@ -111,6 +111,18 @@ type InstanceTab struct {
 	Title      string `json:"title"`
 }
 
+// InstanceMetrics represents memory metrics for an instance.
+type InstanceMetrics struct {
+	InstanceID    string  `json:"instanceId"`
+	ProfileName   string  `json:"profileName"`
+	JSHeapUsedMB  float64 `json:"jsHeapUsedMB"`
+	JSHeapTotalMB float64 `json:"jsHeapTotalMB"`
+	Documents     int64   `json:"documents"`
+	Frames        int64   `json:"frames"`
+	Nodes         int64   `json:"nodes"`
+	Listeners     int64   `json:"listeners"`
+}
+
 // LaunchInstanceRequest is the request body for launching an instance.
 type LaunchInstanceRequest struct {
 	ProfileID string `json:"profileId,omitempty"` // profile ID (prof_XXXXXXXX)

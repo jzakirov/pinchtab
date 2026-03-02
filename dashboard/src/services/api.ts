@@ -2,6 +2,7 @@ import type {
   Profile,
   Instance,
   InstanceTab,
+  InstanceMetrics,
   Agent,
   Settings,
   ServerInfo,
@@ -69,6 +70,10 @@ export async function fetchInstanceTabs(id: string): Promise<InstanceTab[]> {
 
 export async function fetchAllTabs(): Promise<InstanceTab[]> {
   return request<InstanceTab[]>("/instances/tabs");
+}
+
+export async function fetchAllMetrics(): Promise<InstanceMetrics[]> {
+  return request<InstanceMetrics[]>("/instances/metrics");
 }
 
 // Agents — endpoint is /api/agents (dashboard API)

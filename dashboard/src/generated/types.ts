@@ -64,7 +64,7 @@ export interface ActivityEvent {
   method: string;
   path: string;
   timestamp: string;
-  details?: { [key: string]: any };
+  details?: { [key: string]: any};
 }
 /**
  * ScreencastSettings configures live tab previews.
@@ -124,6 +124,19 @@ export interface InstanceTab {
   instanceId: string;
   url: string;
   title: string;
+}
+/**
+ * InstanceMetrics represents memory metrics for an instance.
+ */
+export interface InstanceMetrics {
+  instanceId: string;
+  profileName: string;
+  jsHeapUsedMB: number /* float64 */;
+  jsHeapTotalMB: number /* float64 */;
+  documents: number /* int64 */;
+  frames: number /* int64 */;
+  nodes: number /* int64 */;
+  listeners: number /* int64 */;
 }
 /**
  * LaunchInstanceRequest is the request body for launching an instance.

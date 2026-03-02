@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pinchtab/pinchtab/internal/api/types"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/idutil"
 	"github.com/pinchtab/pinchtab/internal/profiles"
@@ -465,6 +466,36 @@ func (o *Orchestrator) AllTabs() []bridge.InstanceTab {
 				Title:      tab.Title,
 			})
 		}
+	}
+	return all
+}
+
+func (o *Orchestrator) AllMetrics() []types.InstanceMetrics {
+	o.mu.RLock()
+	instances := make([]*InstanceInternal, 0)
+	for _, inst := range o.instances {
+		if inst.Status == "running" && instanceIsActive(inst) {
+			instances = append(instances, inst)
+		}
+	}
+	o.mu.RUnlock()
+
+	var all []types.InstanceMetrics
+	for _, inst := range instances {
+		mem, err := o.fetchMetrics(inst.URL)
+		if err != nil || mem == nil {
+			continue
+		}
+		all = append(all, types.InstanceMetrics{
+			InstanceID:    inst.ID,
+			ProfileName:   inst.ProfileName,
+			JSHeapUsedMB:  mem.JSHeapUsedMB,
+			JSHeapTotalMB: mem.JSHeapTotalMB,
+			Documents:     mem.Documents,
+			Frames:        mem.Frames,
+			Nodes:         mem.Nodes,
+			Listeners:     mem.Listeners,
+		})
 	}
 	return all
 }

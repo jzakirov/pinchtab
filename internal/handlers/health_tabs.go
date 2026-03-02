@@ -39,7 +39,37 @@ func (h *Handlers) HandleEnsureChrome(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) HandleMetrics(w http.ResponseWriter, r *http.Request) {
-	web.JSON(w, 200, map[string]any{"metrics": snapshotMetrics()})
+	result := map[string]any{"metrics": snapshotMetrics()}
+
+	// Add browser memory metrics if available
+	if h.Bridge != nil {
+		if mem, err := h.Bridge.GetBrowserMemoryMetrics(); err == nil && mem != nil {
+			result["memory"] = mem
+		}
+	}
+
+	web.JSON(w, 200, result)
+}
+
+func (h *Handlers) HandleTabMetrics(w http.ResponseWriter, r *http.Request) {
+	tabID := r.PathValue("id")
+	if tabID == "" {
+		web.Error(w, 400, fmt.Errorf("missing tab id"))
+		return
+	}
+
+	if h.Bridge == nil {
+		web.Error(w, 503, fmt.Errorf("bridge not initialized"))
+		return
+	}
+
+	mem, err := h.Bridge.GetMemoryMetrics(tabID)
+	if err != nil {
+		web.Error(w, 500, fmt.Errorf("failed to get metrics: %w", err))
+		return
+	}
+
+	web.JSON(w, 200, mem)
 }
 
 func (h *Handlers) HandleTabs(w http.ResponseWriter, r *http.Request) {
