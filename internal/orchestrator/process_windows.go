@@ -20,8 +20,8 @@ func killProcessGroup(pid int, _ syscall.Signal) error {
 }
 
 var (
-	modkernel32          = syscall.NewLazyDLL("kernel32.dll")
-	procOpenProcess      = modkernel32.NewProc("OpenProcess")
+	modkernel32            = syscall.NewLazyDLL("kernel32.dll")
+	procOpenProcess        = modkernel32.NewProc("OpenProcess")
 	procGetExitCodeProcess = modkernel32.NewProc("GetExitCodeProcess")
 )
 
@@ -36,7 +36,7 @@ func processAlive(pid int) bool {
 	// Instead, use OpenProcess + GetExitCodeProcess to check liveness.
 	handle, _, err := procOpenProcess.Call(
 		uintptr(processQueryLimitedInfo),
-		0,            // bInheritHandle = false
+		0, // bInheritHandle = false
 		uintptr(pid),
 	)
 	if handle == 0 {
