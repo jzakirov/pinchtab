@@ -5,7 +5,7 @@ Browser control for AI agents via [Pinchtab](https://pinchtab.com). Single-tool 
 ## Install
 
 ```bash
-openclaw plugins install @pinchtab/openclaw-plugin
+openclaw plugins install @pinchtab/pinchtab
 openclaw gateway restart
 ```
 
