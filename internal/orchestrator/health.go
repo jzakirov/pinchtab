@@ -76,6 +76,7 @@ func (o *Orchestrator) monitor(inst *InstanceInternal) {
 			if resolvedURL != "" {
 				inst.URL = resolvedURL
 			}
+			o.syncInstanceToManager(&inst.Instance)
 			eventType = "instance.started"
 			slog.Info("instance ready", "id", inst.ID, "port", inst.Port)
 		} else if exitedEarly {
