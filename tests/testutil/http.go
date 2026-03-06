@@ -9,14 +9,13 @@ import (
 	"time"
 )
 
-// Client wraps an HTTP client bound to a server URL for integration tests.
+// Client is an HTTP client bound to a test server URL.
 type Client struct {
 	BaseURL   string
 	AuthToken string
 	Timeout   time.Duration
 }
 
-// NewClient creates a test HTTP client for the given base URL.
 func NewClient(baseURL string) *Client {
 	return &Client{
 		BaseURL:   baseURL,
@@ -25,7 +24,6 @@ func NewClient(baseURL string) *Client {
 	}
 }
 
-// Get performs a GET request and returns status + body.
 func (c *Client) Get(t *testing.T, path string) (int, []byte) {
 	t.Helper()
 	resp, err := http.Get(c.BaseURL + path)
@@ -37,7 +35,6 @@ func (c *Client) Get(t *testing.T, path string) (int, []byte) {
 	return resp.StatusCode, body
 }
 
-// Post performs a POST request with JSON body.
 func (c *Client) Post(t *testing.T, path string, payload any) (int, []byte) {
 	t.Helper()
 	var reader io.Reader
@@ -57,7 +54,6 @@ func (c *Client) Post(t *testing.T, path string, payload any) (int, []byte) {
 	return resp.StatusCode, body
 }
 
-// PostRaw performs a POST request with a raw string body.
 func (c *Client) PostRaw(t *testing.T, path string, body string) (int, []byte) {
 	t.Helper()
 	resp, err := http.Post(c.BaseURL+path, "application/json", strings.NewReader(body))
@@ -69,7 +65,6 @@ func (c *Client) PostRaw(t *testing.T, path string, body string) (int, []byte) {
 	return resp.StatusCode, data
 }
 
-// Patch performs a PATCH request with JSON body.
 func (c *Client) Patch(t *testing.T, path string, payload any) (int, []byte) {
 	t.Helper()
 	var reader io.Reader
@@ -94,7 +89,6 @@ func (c *Client) Patch(t *testing.T, path string, payload any) (int, []byte) {
 	return resp.StatusCode, body
 }
 
-// Delete performs a DELETE request.
 func (c *Client) Delete(t *testing.T, path string) (int, []byte) {
 	t.Helper()
 	req, err := http.NewRequest("DELETE", c.BaseURL+path, nil)
@@ -110,7 +104,8 @@ func (c *Client) Delete(t *testing.T, path string) (int, []byte) {
 	return resp.StatusCode, body
 }
 
-// PostWithRetry attempts a POST request with retries for flaky tests.
+// PostWithRetry retries on non-200 responses, useful for tests where the
+// instance needs a moment to become fully responsive.
 func (c *Client) PostWithRetry(t *testing.T, path string, body any, maxRetries int) (int, []byte) {
 	t.Helper()
 
@@ -167,7 +162,8 @@ func (c *Client) PostWithRetry(t *testing.T, path string, body any, maxRetries i
 	return lastCode, lastBody
 }
 
-// JSONField extracts a string field from JSON response body.
+// JSONField extracts a string field from a JSON body. Non-string values
+// are marshalled back to JSON strings.
 func JSONField(t *testing.T, data []byte, key string) string {
 	t.Helper()
 	var m map[string]any

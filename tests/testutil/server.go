@@ -1,4 +1,4 @@
-// Package testutil provides shared helpers for integration tests.
+// Package testutil provides shared helpers for pinchtab integration tests.
 package testutil
 
 import (
@@ -16,7 +16,6 @@ import (
 	"time"
 )
 
-// Timeout constants for integration test operations.
 const (
 	HealthTimeout   = 30 * time.Second
 	HealthTimeoutCI = 60 * time.Second
@@ -24,14 +23,12 @@ const (
 	InstanceTimeout = 30 * time.Second
 )
 
-// ServerConfig holds configuration for a test server instance.
 type ServerConfig struct {
-	Port     string // Server port (default: "19867")
-	Headless bool   // Run Chrome headless (default: true)
-	Stealth  string // Stealth level (default: "light")
+	Port     string // default: "19867"
+	Headless bool   // default: true
+	Stealth  string // default: "light"
 }
 
-// DefaultConfig returns a ServerConfig with sensible test defaults.
 func DefaultConfig() ServerConfig {
 	port := os.Getenv("PINCHTAB_TEST_PORT")
 	if port == "" {
@@ -44,19 +41,18 @@ func DefaultConfig() ServerConfig {
 	}
 }
 
-// Server represents a running pinchtab test server with managed temp dirs.
 type Server struct {
 	URL        string
-	Dir        string // Root temp dir containing binary, state, profiles
+	Dir        string // root temp dir (binary, state, profiles)
 	BinaryPath string
 	StateDir   string
 	ProfileDir string
 	cmd        *exec.Cmd
 }
 
-// NewTestServer builds, launches, and registers cleanup with t.Cleanup.
-// This is the preferred way to create a test server — cleanup runs automatically
-// even if the test panics. For use in TestMain (no *testing.T), use StartServer instead.
+// NewTestServer is the preferred way to create a test server. Cleanup runs
+// automatically via t.Cleanup, even on panic. Use StartServer for TestMain
+// where there's no *testing.T.
 func NewTestServer(t *testing.T, cfg ServerConfig) *Server {
 	t.Helper()
 	srv, err := StartServer(cfg)
@@ -67,8 +63,7 @@ func NewTestServer(t *testing.T, cfg ServerConfig) *Server {
 	return srv
 }
 
-// StartServer builds, launches, and waits for a pinchtab server.
-// The caller must call server.Stop() to shut down and clean up.
+// StartServer builds, launches, and waits for health. Caller must call Stop().
 func StartServer(cfg ServerConfig) (*Server, error) {
 	testDir, err := os.MkdirTemp("", "pinchtab-test-*")
 	if err != nil {
@@ -91,7 +86,6 @@ func StartServer(cfg ServerConfig) (*Server, error) {
 		}
 	}
 
-	// Build binary
 	build := exec.Command("go", "build", "-o", s.BinaryPath, "./cmd/pinchtab/") // #nosec G204 -- BinaryPath is from os.MkdirTemp, not user input
 	build.Dir = FindRepoRoot()
 	build.Stdout = os.Stdout
@@ -101,7 +95,7 @@ func StartServer(cfg ServerConfig) (*Server, error) {
 		return nil, fmt.Errorf("build pinchtab: %w", err)
 	}
 
-	// Prepare environment — strip existing BRIDGE_*/PINCHTAB_* to avoid conflicts
+	// Strip existing BRIDGE_*/PINCHTAB_* to avoid test pollution from host config
 	env := filterEnv(os.Environ(), "BRIDGE_", "PINCHTAB_")
 	env = append(env,
 		"PINCHTAB_PORT="+cfg.Port,
@@ -115,7 +109,7 @@ func StartServer(cfg ServerConfig) (*Server, error) {
 		env = append(env, "CHROME_BINARY="+bin)
 	}
 
-	// Start in its own process group for clean shutdown
+	// Process group enables clean shutdown of Chrome children
 	s.cmd = exec.Command(s.BinaryPath) // #nosec G204 -- BinaryPath is from os.MkdirTemp, not user input
 	s.cmd.Env = env
 	s.cmd.Stdout = os.Stdout
@@ -127,7 +121,6 @@ func StartServer(cfg ServerConfig) (*Server, error) {
 		return nil, fmt.Errorf("start pinchtab: %w", err)
 	}
 
-	// Wait for health
 	timeout := HealthTimeout
 	if os.Getenv("CI") == "true" {
 		timeout = HealthTimeoutCI
@@ -140,7 +133,6 @@ func StartServer(cfg ServerConfig) (*Server, error) {
 	return s, nil
 }
 
-// Stop gracefully shuts down the server and cleans up all temp files.
 func (s *Server) Stop() {
 	if s.cmd != nil && s.cmd.Process != nil {
 		TerminateProcessGroup(s.cmd, ShutdownTimeout)
@@ -148,7 +140,7 @@ func (s *Server) Stop() {
 	s.Cleanup()
 }
 
-// Cleanup removes the test directory. Respects PINCHTAB_TEST_KEEP_DIR.
+// Cleanup removes the test directory unless PINCHTAB_TEST_KEEP_DIR is set.
 func (s *Server) Cleanup() {
 	if os.Getenv("PINCHTAB_TEST_KEEP_DIR") != "" {
 		fmt.Fprintf(os.Stderr, "testutil: keeping test dir (PINCHTAB_TEST_KEEP_DIR set): %s\n", s.Dir)
@@ -157,13 +149,13 @@ func (s *Server) Cleanup() {
 	_ = os.RemoveAll(s.Dir)
 }
 
-// TerminateProcessGroup sends SIGTERM to the process group, then SIGKILL on timeout.
+// TerminateProcessGroup sends SIGTERM to the process group, escalating to
+// SIGKILL if the process doesn't exit within the timeout.
 func TerminateProcessGroup(cmd *exec.Cmd, timeout time.Duration) {
 	if cmd.Process == nil {
 		return
 	}
 
-	// Try graceful group shutdown
 	if pgid, err := syscall.Getpgid(cmd.Process.Pid); err == nil {
 		_ = syscall.Kill(-pgid, syscall.SIGTERM)
 	} else {
@@ -177,7 +169,6 @@ func TerminateProcessGroup(cmd *exec.Cmd, timeout time.Duration) {
 	case <-done:
 		return
 	case <-time.After(timeout):
-		// Force kill the entire process group
 		if pgid, err := syscall.Getpgid(cmd.Process.Pid); err == nil {
 			_ = syscall.Kill(-pgid, syscall.SIGKILL)
 		}
@@ -186,7 +177,6 @@ func TerminateProcessGroup(cmd *exec.Cmd, timeout time.Duration) {
 	}
 }
 
-// WaitForHealth polls the /health endpoint until it returns 200 or the timeout expires.
 func WaitForHealth(base string, timeout time.Duration) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -214,7 +204,7 @@ func WaitForHealth(base string, timeout time.Duration) bool {
 	}
 }
 
-// FindRepoRoot walks up from the current directory to find go.mod.
+// FindRepoRoot walks up from cwd looking for go.mod.
 func FindRepoRoot() string {
 	dir, _ := os.Getwd()
 	for {
@@ -230,7 +220,7 @@ func FindRepoRoot() string {
 	return filepath.Join("..", "..")
 }
 
-// LaunchInstance creates and waits for a test instance to be ready.
+// LaunchInstance creates an instance and polls until it can navigate.
 func LaunchInstance(base string) (string, error) {
 	resp, err := http.Post(
 		base+"/instances/launch",
@@ -260,7 +250,6 @@ func LaunchInstance(base string) (string, error) {
 
 	fmt.Fprintf(os.Stderr, "testutil: launched instance %s\n", id)
 
-	// Wait for instance readiness
 	ctx, cancel := context.WithTimeout(context.Background(), InstanceTimeout)
 	defer cancel()
 
