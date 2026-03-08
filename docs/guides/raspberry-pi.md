@@ -1,4 +1,4 @@
-# Raspberry Pi Setup Guide
+# Raspberry Pi
 
 PinchTab runs on Raspberry Pi as long as Chromium or Chrome is available. The current implementation does not need Pi-specific feature flags, but it does benefit from conservative defaults because memory is limited.
 

@@ -16,11 +16,11 @@ import (
 	"github.com/pinchtab/pinchtab/internal/handlers"
 )
 
-// runBridgeServer starts a bridge server without orchestrator or dashboard
+// runBridgeServer starts a bridge without orchestrator or dashboard
 // This is used for spawned instances by the orchestrator
 func runBridgeServer(cfg *config.RuntimeConfig) {
 	listenAddr := cfg.ListenAddr()
-	slog.Info("🦀 Pinchtab Bridge Server", "listen", listenAddr, "profile", cfg.ProfileDir)
+	slog.Info("🦀 Pinchtab Bridge", "listen", listenAddr, "profile", cfg.ProfileDir)
 
 	// Create a bridge instance with lazy initialization
 	// Chrome will be initialized on first request via ensureChrome()
@@ -34,7 +34,7 @@ func runBridgeServer(cfg *config.RuntimeConfig) {
 	shutdownOnce := &sync.Once{}
 	doShutdown := func() {
 		shutdownOnce.Do(func() {
-			slog.Info("shutting down bridge server...")
+			slog.Info("shutting down bridge...")
 		})
 	}
 	h.RegisterRoutes(mux, doShutdown)
@@ -53,7 +53,7 @@ func runBridgeServer(cfg *config.RuntimeConfig) {
 	}
 
 	go func() {
-		slog.Info("bridge server listening", "addr", listenAddr)
+		slog.Info("bridge listening", "addr", listenAddr)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("server error", "err", err)
 			os.Exit(1)

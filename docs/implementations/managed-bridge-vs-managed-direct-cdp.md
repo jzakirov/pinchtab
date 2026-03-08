@@ -1,4 +1,4 @@
-# Managed Bridge vs Managed Direct-CDP
+# Bridge vs Direct-CDP
 
 This page compares two ways Pinchtab can manage a browser instance:
 

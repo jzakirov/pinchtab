@@ -1,4 +1,4 @@
-# Attach An Existing Chrome
+# Attach Chrome
 
 Use this guide when:
 

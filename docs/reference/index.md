@@ -1,4 +1,4 @@
-# CLI Reference
+# Reference
 
 Reference pages for the current PinchTab CLI and closely related command-facing endpoints.
 
