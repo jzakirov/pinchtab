@@ -14,9 +14,6 @@ end_test
 # ─────────────────────────────────────────────────────────────────
 start_test "fixtures server"
 
-# Verify test fixtures are accessible
-curl -sf "${FIXTURES_URL}/" > /dev/null && echo -e "  ${GREEN}✓${NC} GET ${FIXTURES_URL}/" && ((ASSERTIONS_PASSED++)) || ((ASSERTIONS_FAILED++))
-curl -sf "${FIXTURES_URL}/form.html" > /dev/null && echo -e "  ${GREEN}✓${NC} GET ${FIXTURES_URL}/form.html" && ((ASSERTIONS_PASSED++)) || ((ASSERTIONS_FAILED++))
-curl -sf "${FIXTURES_URL}/table.html" > /dev/null && echo -e "  ${GREEN}✓${NC} GET ${FIXTURES_URL}/table.html" && ((ASSERTIONS_PASSED++)) || ((ASSERTIONS_FAILED++))
+assert_fixtures_accessible
 
 end_test

@@ -8,17 +8,16 @@ start_test "pinchtab snap --tab <id> (regression #207)"
 
 # Create a tab
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/index.html\"}"
-CREATED_TAB=$(echo "$RESULT" | jq -r '.tabId')
-echo -e "  Created tab: ${CREATED_TAB:0:12}..."
+show_tab "created" "$(get_tab_id)"
 
 # Get tab ID from /tabs endpoint
 pt_get /tabs
-LISTED_TAB=$(echo "$RESULT" | jq -r '.tabs[-1].id')
-echo -e "  Listed tab:  ${LISTED_TAB:0:12}..."
+TAB_ID=$(get_last_tab)
+show_tab "listed" "$TAB_ID"
 
 # Test: /tabs/{id}/snapshot should work (was broken in #207)
-pt_get "/tabs/${LISTED_TAB}/snapshot"
-assert_status 200 "${PINCHTAB_URL}/tabs/${LISTED_TAB}/snapshot"
+pt_get "/tabs/${TAB_ID}/snapshot"
+assert_ok "tab snapshot"
 assert_json_contains "$RESULT" '.title' 'E2E Test'
 
 end_test
@@ -27,13 +26,13 @@ end_test
 start_test "pinchtab text/screenshot --tab <id>"
 
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/form.html\"}"
-TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
+TAB_ID=$(get_tab_id)
 
-# Test /tabs/{id}/text
-assert_status 200 "${PINCHTAB_URL}/tabs/${TAB_ID}/text"
+pt_get "/tabs/${TAB_ID}/text"
+assert_ok "tab text"
 
-# Test /tabs/{id}/screenshot
-assert_status 200 "${PINCHTAB_URL}/tabs/${TAB_ID}/screenshot"
+pt_get "/tabs/${TAB_ID}/screenshot"
+assert_ok "tab screenshot"
 
 end_test
 
@@ -42,11 +41,11 @@ start_test "pinchtab tab close"
 
 BEFORE=$(get_tab_count)
 
-# Create and close a tab
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/buttons.html\"}"
-TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
+TAB_ID=$(get_tab_id)
 
-assert_status 200 "${PINCHTAB_URL}/tabs/${TAB_ID}/close" "POST"
+pt_post "/tabs/${TAB_ID}/close" -d '{}'
+assert_ok "tab close"
 
 sleep 1
 assert_tab_closed "$BEFORE"

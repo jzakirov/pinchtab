@@ -17,9 +17,7 @@ end_test
 # ─────────────────────────────────────────────────────────────────
 start_test "pinchtab pdf (shorthand)"
 
-# Note: /pdf shorthand not available in server mode — skipped
-echo -e "  ${YELLOW}⚠${NC} Skipped: /pdf shorthand not in server mode"
-((ASSERTIONS_PASSED++)) || true
+skip "/pdf shorthand not in server mode"
 
 end_test
 
@@ -27,7 +25,7 @@ end_test
 start_test "pinchtab screenshot --tab <id>"
 
 pt_get /tabs
-TAB_ID=$(echo "$RESULT" | jq -r '.tabs[0].id')
+TAB_ID=$(get_first_tab)
 
 pt_get "/tabs/${TAB_ID}/screenshot"
 assert_ok "tab screenshot"
@@ -38,7 +36,7 @@ end_test
 start_test "pinchtab pdf --tab <id>"
 
 pt_get /tabs
-TAB_ID=$(echo "$RESULT" | jq -r '.tabs[0].id')
+TAB_ID=$(get_first_tab)
 
 pt_get "/tabs/${TAB_ID}/pdf"
 assert_ok "tab pdf"

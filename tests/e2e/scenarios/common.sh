@@ -220,6 +220,42 @@ pt_get() { pinchtab GET "$1"; echo "$RESULT"; }
 pt_post() { pinchtab POST "$1" -d "$2"; echo "$RESULT"; }
 
 # ================================================================
+# URL accessibility checks
+# ================================================================
+
+# Check if a URL is accessible
+assert_url_accessible() {
+  local url="$1"
+  local label="${2:-$url}"
+  
+  if curl -sf "$url" > /dev/null 2>&1; then
+    echo -e "  ${GREEN}✓${NC} GET $label"
+    ((ASSERTIONS_PASSED++)) || true
+  else
+    echo -e "  ${RED}✗${NC} GET $label (not accessible)"
+    ((ASSERTIONS_FAILED++)) || true
+  fi
+}
+
+# Check all fixture pages
+assert_fixtures_accessible() {
+  assert_url_accessible "${FIXTURES_URL}/" "fixtures/"
+  assert_url_accessible "${FIXTURES_URL}/form.html" "fixtures/form.html"
+  assert_url_accessible "${FIXTURES_URL}/table.html" "fixtures/table.html"
+  assert_url_accessible "${FIXTURES_URL}/buttons.html" "fixtures/buttons.html"
+}
+
+# ================================================================
+# Skip helper
+# ================================================================
+
+skip() {
+  local reason="$1"
+  echo -e "  ${YELLOW}⚠${NC} Skipped: $reason"
+  ((ASSERTIONS_PASSED++)) || true
+}
+
+# ================================================================
 # HTTP status assertions
 # ================================================================
 
@@ -315,6 +351,28 @@ press_key() {
 # Get current tab count
 get_tab_count() {
   curl -s "${PINCHTAB_URL}/tabs" | jq '.tabs | length'
+}
+
+# Get tab ID from last response (e.g., after /navigate)
+get_tab_id() {
+  echo "$RESULT" | jq -r '.tabId'
+}
+
+# Get first tab ID from /tabs response
+get_first_tab() {
+  echo "$RESULT" | jq -r '.tabs[0].id'
+}
+
+# Get last tab ID from /tabs response  
+get_last_tab() {
+  echo "$RESULT" | jq -r '.tabs[-1].id'
+}
+
+# Print tab ID (truncated for readability)
+show_tab() {
+  local label="$1"
+  local id="$2"
+  echo -e "  ${MUTED}$label: ${id:0:12}...${NC}"
 }
 
 # Assert tab count equals expected
