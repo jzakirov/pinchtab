@@ -14,6 +14,7 @@ func TestResultStoreStoreAndGet(t *testing.T) {
 	got := rs.Get("tsk_1")
 	if got == nil {
 		t.Fatal("expected to find stored task")
+		return
 	}
 	if got.ID != "tsk_1" {
 		t.Errorf("expected tsk_1, got %s", got.ID)

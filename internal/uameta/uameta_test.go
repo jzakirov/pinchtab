@@ -12,6 +12,7 @@ func TestBuild_Empty(t *testing.T) {
 	p := Build("", "144.0.0.0")
 	if p == nil {
 		t.Fatal("expected non-nil for empty user agent with chromeVersion")
+		return
 	}
 	if p.UserAgent == "" {
 		t.Fatal("expected generated user agent")
@@ -22,10 +23,12 @@ func TestBuild_Versions(t *testing.T) {
 	p := Build("Mozilla/5.0 Test", "144.0.7559.133")
 	if p == nil {
 		t.Fatal("expected non-nil")
+		return
 	}
 	meta := p.UserAgentMetadata
 	if meta == nil {
 		t.Fatal("expected metadata")
+		return
 	}
 	for _, b := range meta.Brands {
 		if b.Brand == "Google Chrome" && b.Version != "144" {
