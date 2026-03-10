@@ -10,6 +10,9 @@ coverage.out
 .git/
 .github/
 
+# Tests (E2E fixtures, scenarios, results)
+tests/
+
 # Local state
 .pinchtab/
 .openclaw/
@@ -21,9 +24,19 @@ coverage.out
 .vscode/
 *.swp
 
-# Docs
+# Docs (not needed in image)
 docs/
 
 # Development
 node_modules/
+dashboard/node_modules/
 *.log
+
+# Build caches
+.gocache/
+.gomodcache/
+tmp/
+
+# Markdown (README, RELEASE, etc.)
+*.md
+!dashboard/**/*.md

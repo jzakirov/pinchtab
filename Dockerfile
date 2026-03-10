@@ -1,13 +1,17 @@
-# Dashboard build stage
-FROM oven/bun:latest AS dashboard
+# Stage 1: Build the React dashboard with Bun.
+# The compiled assets are copied into the Go embed directory in stage 2.
+FROM oven/bun:1 AS dashboard
 WORKDIR /build
 COPY dashboard/package.json dashboard/bun.lock ./
 RUN bun install --frozen-lockfile
 COPY dashboard/ .
 RUN bun run build
 
-# Go build stage
-FROM golang:1.26-alpine AS builder
+# Stage 2: Compile the Go binary.
+# Dashboard dist is embedded into the binary via Go's embed package.
+# The rename to dashboard.html avoids a conflict with the Go embed server's
+# own index route — the dashboard handler serves it explicitly.
+FROM golang:1.26-alpine3.21 AS builder
 RUN apk add --no-cache git
 WORKDIR /build
 COPY go.mod go.sum ./
@@ -17,13 +21,14 @@ COPY --from=dashboard /build/dist/ internal/dashboard/dashboard/
 RUN mv internal/dashboard/dashboard/index.html internal/dashboard/dashboard/dashboard.html
 RUN go build -ldflags="-s -w" -o pinchtab ./cmd/pinchtab
 
-# Runtime stage
-FROM alpine:latest
+# Stage 3: Minimal runtime image with Chromium.
+# Only the compiled binary and entrypoint script are copied in.
+FROM alpine:3.21
 
 LABEL org.opencontainers.image.source="https://github.com/pinchtab/pinchtab"
 LABEL org.opencontainers.image.description="High-performance browser automation bridge"
 
-# Install Chromium and dependencies
+# Chromium and its runtime dependencies for headless operation
 RUN apk add --no-cache \
     chromium \
     nss \
@@ -33,28 +38,26 @@ RUN apk add --no-cache \
     ttf-freefont \
     dumb-init
 
-# Create non-root user and persistent config/state directory
+# Non-root user; /data is the persistent volume mount point
 RUN adduser -D -h /data -g '' pinchtab && \
     mkdir -p /data && \
     chown pinchtab:pinchtab /data
 
-# Copy binary from builder
 COPY --from=builder /build/pinchtab /usr/local/bin/pinchtab
 COPY --chmod=0755 docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
-# Switch to non-root user
 USER pinchtab
 WORKDIR /data
 
-# Environment variables
+# HOME and XDG_CONFIG_HOME point into the persistent volume so config
+# and Chrome profiles survive container restarts.
 ENV HOME=/data \
     XDG_CONFIG_HOME=/data/.config
 
-# Expose port
 EXPOSE 9867
 
-# Use dumb-init to properly handle signals
-ENTRYPOINT ["/usr/bin/dumb-init", "--"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -q -O /dev/null http://localhost:9867/health || exit 1
 
-# Run pinchtab
+ENTRYPOINT ["/usr/bin/dumb-init", "--"]
 CMD ["/usr/local/bin/docker-entrypoint.sh", "pinchtab"]
