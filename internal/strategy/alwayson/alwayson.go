@@ -6,9 +6,11 @@ import (
 )
 
 func init() {
+	// Defaults here are used if SetRuntimeConfig is not called.
+	// In dashboard mode, SetRuntimeConfig overrides these from config file.
 	strategy.MustRegister("always-on", func() strategy.Strategy {
 		return autorestart.New(autorestart.AutorestartConfig{
-			MaxRestarts:  20,
+			MaxRestarts:  -1,
 			StrategyName: "always-on",
 			StatusPath:   "/always-on/status",
 		})

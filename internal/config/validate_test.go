@@ -67,9 +67,16 @@ func TestValidateFileConfig_RestartPolicy(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "zero max restarts invalid",
+			name: "zero max restarts valid (no restarts)",
 			restart: MultiInstanceRestartConfig{
 				MaxRestarts: intPtr(0),
+			},
+			wantErr: false,
+		},
+		{
+			name: "negative max restarts invalid (except -1)",
+			restart: MultiInstanceRestartConfig{
+				MaxRestarts: intPtr(-2),
 			},
 			wantErr: true,
 		},

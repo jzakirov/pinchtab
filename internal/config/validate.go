@@ -40,10 +40,10 @@ func ValidateFileConfig(fc *FileConfig) []error {
 		}
 	}
 	if fc.MultiInstance.Restart.MaxRestarts != nil {
-		if *fc.MultiInstance.Restart.MaxRestarts != -1 && *fc.MultiInstance.Restart.MaxRestarts < 1 {
+		if *fc.MultiInstance.Restart.MaxRestarts < -1 {
 			errs = append(errs, ValidationError{
 				Field:   "multiInstance.restart.maxRestarts",
-				Message: fmt.Sprintf("must be >= 1 or -1 for unlimited (got %d)", *fc.MultiInstance.Restart.MaxRestarts),
+				Message: fmt.Sprintf("must be >= 0 or -1 for unlimited (got %d)", *fc.MultiInstance.Restart.MaxRestarts),
 			})
 		}
 	}

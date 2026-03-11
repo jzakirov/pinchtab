@@ -37,6 +37,9 @@ const (
 )
 
 func init() {
+	// simple-autorestart uses autorestart defaults (MaxRestarts=3).
+	// Both simple-autorestart and always-on implement HandlesLaunch()
+	// via the shared Strategy type, suppressing dashboard auto-launch.
 	strategy.MustRegister("simple-autorestart", func() strategy.Strategy {
 		return New(AutorestartConfig{})
 	})
