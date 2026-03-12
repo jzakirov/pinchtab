@@ -377,11 +377,18 @@ func TestCLIScroll(t *testing.T) {
 		t.Errorf("expected ref=e20, got %v", body["ref"])
 	}
 
-	// Scroll by pixels
+	// Scroll by pixels (now sends int, not string)
 	cliAction(client, m.base(), "", "scroll", []string{"800"})
 	_ = json.Unmarshal([]byte(m.lastBody), &body)
-	if body["scrollY"] != "800" {
+	if body["scrollY"] != float64(800) { // JSON unmarshals numbers as float64
 		t.Errorf("expected scrollY=800, got %v", body["scrollY"])
+	}
+
+	// Scroll by direction
+	cliAction(client, m.base(), "", "scroll", []string{"down"})
+	_ = json.Unmarshal([]byte(m.lastBody), &body)
+	if body["direction"] != "down" {
+		t.Errorf("expected direction=down, got %v", body["direction"])
 	}
 }
 
