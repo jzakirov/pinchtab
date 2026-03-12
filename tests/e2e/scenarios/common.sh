@@ -258,6 +258,28 @@ assert_result_exists() {
   assert_json_exists "$RESULT" "$path" "$desc"
 }
 
+# Assert input field value does NOT contain text (case-insensitive)
+# Usage: assert_input_not_contains "#username" "Enter" "username should not contain Enter"
+assert_input_not_contains() {
+  local selector="$1"
+  local forbidden="$2"
+  local desc="${3:-$selector should not contain '$forbidden'}"
+
+  pt_post /evaluate -d "{\"expression\":\"document.querySelector('$selector')?.value || ''\"}"
+  local value
+  value=$(echo "$RESULT" | jq -r '.result // empty')
+
+  if echo "$value" | grep -qi "$forbidden"; then
+    echo -e "  ${RED}✗${NC} $desc: found '$forbidden' in value '$value'"
+    ((ASSERTIONS_FAILED++)) || true
+    return 1
+  else
+    echo -e "  ${GREEN}✓${NC} $desc (value: '$value')"
+    ((ASSERTIONS_PASSED++)) || true
+    return 0
+  fi
+}
+
 # Assert HTTP error status from $RESULT
 # Usage: assert_http_error 400 "error message pattern"
 assert_http_error() {
