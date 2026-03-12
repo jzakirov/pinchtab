@@ -366,12 +366,15 @@ func cliAction(client *http.Client, base, token, kind string, args []string) {
 		body["key"] = args[0]
 	case "scroll":
 		if len(args) < 1 {
-			fatal("Usage: pinchtab scroll <ref|pixels>  (e.g. e5 or 800)")
+			fatal("Usage: pinchtab scroll <ref|pixels|direction>  (e.g. e5, 800, down, up)")
 		}
 		if strings.HasPrefix(args[0], "e") {
 			body["ref"] = args[0]
+		} else if v, err := strconv.Atoi(args[0]); err == nil {
+			body["scrollY"] = v
 		} else {
-			body["scrollY"] = args[0]
+			// direction: down, up, etc.
+			body["direction"] = args[0]
 		}
 	case "select":
 		if len(args) < 2 {
