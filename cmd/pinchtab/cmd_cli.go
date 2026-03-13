@@ -66,11 +66,11 @@ var clickCmd = &cobra.Command{
 var typeCmd = &cobra.Command{
 	Use:   "type <ref> <text>",
 	Short: "Type into element",
-	Args:  cobra.ExactArgs(2),
+	Args:  cobra.MinimumNArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		runCLIWith(cfg, func(client *http.Client, base, token string) {
-			browseractions.Action(client, base, token, "type", args)
+			browseractions.ActionSimpleWithFlags(client, base, token, "type", args, cmd)
 		})
 	},
 }
@@ -92,7 +92,7 @@ var tabsCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		runCLIWith(cfg, func(client *http.Client, base, token string) {
-			browseractions.Tabs(client, base, token, args)
+			browseractions.Tabs(client, base, token, nil)
 		})
 	},
 }
@@ -122,11 +122,11 @@ var healthCmd = &cobra.Command{
 var pressCmd = &cobra.Command{
 	Use:   "press <key>",
 	Short: "Press key (Enter, Tab, Escape...)",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		runCLIWith(cfg, func(client *http.Client, base, token string) {
-			browseractions.Action(client, base, token, "press", args)
+			browseractions.ActionSimpleWithFlags(client, base, token, "press", args, cmd)
 		})
 	},
 }
@@ -134,11 +134,11 @@ var pressCmd = &cobra.Command{
 var fillCmd = &cobra.Command{
 	Use:   "fill <ref|selector> <text>",
 	Short: "Fill input directly",
-	Args:  cobra.ExactArgs(2),
+	Args:  cobra.MinimumNArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		runCLIWith(cfg, func(client *http.Client, base, token string) {
-			browseractions.Action(client, base, token, "fill", args)
+			browseractions.ActionSimpleWithFlags(client, base, token, "fill", args, cmd)
 		})
 	},
 }
@@ -162,11 +162,11 @@ var hoverCmd = &cobra.Command{
 var scrollCmd = &cobra.Command{
 	Use:   "scroll <ref|pixels>",
 	Short: "Scroll to element or by pixels",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		runCLIWith(cfg, func(client *http.Client, base, token string) {
-			browseractions.Action(client, base, token, "scroll", args)
+			browseractions.ActionSimpleWithFlags(client, base, token, "scroll", args, cmd)
 		})
 	},
 }
@@ -178,7 +178,7 @@ var evalCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		runCLIWith(cfg, func(client *http.Client, base, token string) {
-			browseractions.Evaluate(client, base, token, args)
+			browseractions.EvaluateWithFlags(client, base, token, args, cmd)
 		})
 	},
 }
@@ -262,11 +262,11 @@ var findCmd = &cobra.Command{
 var selectCmd = &cobra.Command{
 	Use:   "select <ref> <value>",
 	Short: "Select option in dropdown",
-	Args:  cobra.ExactArgs(2),
+	Args:  cobra.MinimumNArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		runCLIWith(cfg, func(client *http.Client, base, token string) {
-			browseractions.Action(client, base, token, "select", args)
+			browseractions.ActionSimpleWithFlags(client, base, token, "select", args, cmd)
 		})
 	},
 }
@@ -385,6 +385,16 @@ func init() {
 	navCmd.Flags().Bool("new-tab", false, "Open in new tab")
 	navCmd.Flags().Bool("block-images", false, "Block image loading")
 	navCmd.Flags().Bool("block-ads", false, "Block ads")
+	navCmd.Flags().String("tab", "", "Tab ID")
+
+	clickCmd.Flags().String("tab", "", "Tab ID")
+	hoverCmd.Flags().String("tab", "", "Tab ID")
+	typeCmd.Flags().String("tab", "", "Tab ID")
+	pressCmd.Flags().String("tab", "", "Tab ID")
+	fillCmd.Flags().String("tab", "", "Tab ID")
+	scrollCmd.Flags().String("tab", "", "Tab ID")
+	selectCmd.Flags().String("tab", "", "Tab ID")
+	evalCmd.Flags().String("tab", "", "Tab ID")
 
 	rootCmd.AddCommand(quickCmd)
 	rootCmd.AddCommand(navCmd)

@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"fmt"
 	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
@@ -37,6 +38,11 @@ func NavigateWithFlags(client *http.Client, base, token string, url string, cmd 
 	if v, _ := cmd.Flags().GetBool("block-ads"); v {
 		body["blockAds"] = true
 	}
-	result := apiclient.DoPost(client, base, token, "/navigate", body)
+	tabID, _ := cmd.Flags().GetString("tab")
+	path := "/navigate"
+	if tabID != "" {
+		path = fmt.Sprintf("/tabs/%s/navigate", tabID)
+	}
+	result := apiclient.DoPost(client, base, token, path, body)
 	apiclient.SuggestNextAction("navigate", result)
 }
