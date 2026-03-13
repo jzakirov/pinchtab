@@ -19,6 +19,16 @@
       "stableAfterSec": 300
     }
   },
+  "scheduler": {
+    "enabled": true,
+    "strategy": "fair-fifo",
+    "maxQueueSize": 5,
+    "maxPerAgent": 3,
+    "maxInflight": 2,
+    "workerCount": 2,
+    "maxBatchSize": 5,
+    "resultTTLSec": 120
+  },
   "security": {
     "allowEvaluate": true,
     "allowDownload": true,
