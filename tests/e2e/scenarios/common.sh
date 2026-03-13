@@ -457,7 +457,7 @@ assert_not_ok() {
 click_button() {
   local name="$1"
   local ref
-  ref=$(echo "$RESULT" | jq -r ".nodes[] | select(.name == \"$name\") | .ref" | head -1)
+  ref=$(echo "$RESULT" | jq -r "[.nodes[] | select(.name == \"$name\") | .ref] | first // empty")
 
   if [ -n "$ref" ] && [ "$ref" != "null" ]; then
     pt_post /action "{\"kind\":\"click\",\"ref\":\"${ref}\"}" > /dev/null
@@ -474,11 +474,11 @@ type_into() {
   local name="$1"
   local text="$2"
   local ref
-  ref=$(echo "$RESULT" | jq -r ".nodes[] | select(.name == \"$name\") | .ref" | head -1)
+  ref=$(echo "$RESULT" | jq -r "[.nodes[] | select(.name == \"$name\") | .ref] | first // empty")
 
   # Fallback to textbox role if name not found
   if [ -z "$ref" ] || [ "$ref" = "null" ]; then
-    ref=$(echo "$RESULT" | jq -r '.nodes[] | select(.role == "textbox") | .ref' | head -1)
+    ref=$(echo "$RESULT" | jq -r '[.nodes[] | select(.role == "textbox") | .ref] | first // empty')
   fi
 
   if [ -n "$ref" ] && [ "$ref" != "null" ]; then
@@ -590,7 +590,7 @@ assert_tab_closed() {
 find_ref_by_role() {
   local role="$1"
   local json="${2:-$RESULT}"
-  echo "$json" | jq -r ".nodes[] | select(.role == \"$role\") | .ref" | head -1
+  echo "$json" | jq -r "[.nodes[] | select(.role == \"$role\") | .ref] | first // empty"
 }
 
 # Find first ref by name from RESULT or PT_OUT
@@ -598,7 +598,7 @@ find_ref_by_role() {
 find_ref_by_name() {
   local name="$1"
   local json="${2:-$RESULT}"
-  echo "$json" | jq -r ".nodes[] | select(.name == \"$name\") | .ref" | head -1
+  echo "$json" | jq -r "[.nodes[] | select(.name == \"$name\") | .ref] | first // empty"
 }
 
 # Assert ref was found, with readable error

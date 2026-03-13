@@ -220,13 +220,13 @@ assert_json_field_contains() {
 find_ref_by_role() {
   local role="$1"
   local json="${2:-$PT_OUT}"
-  echo "$json" | jq -r ".nodes[] | select(.role == \"$role\") | .ref" | head -1
+  echo "$json" | jq -r "[.nodes[] | select(.role == \"$role\") | .ref] | first // empty"
 }
 
 find_ref_by_name() {
   local name="$1"
   local json="${2:-$PT_OUT}"
-  echo "$json" | jq -r ".nodes[] | select(.name == \"$name\") | .ref" | head -1
+  echo "$json" | jq -r "[.nodes[] | select(.name == \"$name\") | .ref] | first // empty"
 }
 
 assert_ref_found() {
