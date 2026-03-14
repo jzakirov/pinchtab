@@ -11,7 +11,7 @@ func TestSecurityLevelColor(t *testing.T) {
 	}{
 		{level: "LOCKED", want: string(colorSuccess)},
 		{level: "GUARDED", want: string(colorWarning)},
-		{level: "ELEVATED", want: string(colorDanger)},
+		{level: "ELEVATED", want: string(colorWarning)},
 		{level: "EXPOSED", want: string(colorDanger)},
 		{level: "UNKNOWN", want: string(colorDanger)},
 	}

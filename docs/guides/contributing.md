@@ -1,6 +1,6 @@
 # Contributing
 
-Guide to build PinchTab from source and contribute to the project.
+This is the canonical contributor and development guide for PinchTab.
 
 ## System Requirements
 

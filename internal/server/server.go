@@ -7,8 +7,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -74,24 +72,27 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 	configAPI.RegisterHandlers(mux)
 	profMgr.RegisterHandlers(mux)
 
-	var activeStrategy strategy.Strategy
-	stratName := "manual"
-	if cfg.Strategy != "" {
-		strat, err := strategy.New(cfg.Strategy)
+	strategyName := cfg.Strategy
+	if strategyName == "" {
+		strategyName = "always-on"
+	}
+	activeStrategy, err := strategy.New(strategyName)
+	if err != nil {
+		slog.Warn("unknown strategy, falling back to always-on", "strategy", strategyName, "err", err)
+		activeStrategy, err = strategy.New("always-on")
 		if err != nil {
-			slog.Warn("unknown strategy, falling back to default", "strategy", cfg.Strategy, "err", err)
-		} else {
-			if runtimeAware, ok := strat.(strategy.RuntimeConfigAware); ok {
-				runtimeAware.SetRuntimeConfig(cfg)
-			}
-			if setter, ok := strat.(strategy.OrchestratorAware); ok {
-				setter.SetOrchestrator(orch)
-			}
-			strat.RegisterRoutes(mux)
-			activeStrategy = strat
-			stratName = strat.Name()
+			slog.Error("failed to initialize fallback strategy", "strategy", "always-on", "err", err)
+			os.Exit(1)
 		}
 	}
+	if runtimeAware, ok := activeStrategy.(strategy.RuntimeConfigAware); ok {
+		runtimeAware.SetRuntimeConfig(cfg)
+	}
+	if setter, ok := activeStrategy.(strategy.OrchestratorAware); ok {
+		setter.SetOrchestrator(orch)
+	}
+	activeStrategy.RegisterRoutes(mux)
+	stratName := activeStrategy.Name()
 
 	allocPolicy := cfg.AllocationPolicy
 	if allocPolicy == "" {
@@ -120,11 +121,6 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 	}
 
 	slog.Info("orchestration", "strategy", stratName, "allocation", allocPolicy)
-
-	if activeStrategy == nil {
-		orch.RegisterHandlers(mux)
-		RegisterDefaultProxyRoutes(mux, orch)
-	}
 
 	var sched *scheduler.Scheduler
 	if cfg.Scheduler.Enabled {
@@ -176,59 +172,16 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 		IdleTimeout:       120 * time.Second,
 	}
 
-	strategyHandlesLaunch := false
-	if activeStrategy != nil {
-		if err := activeStrategy.Start(context.Background()); err != nil {
-			slog.Error("strategy start failed", "strategy", activeStrategy.Name(), "err", err)
-		} else if launchAware, ok := activeStrategy.(strategy.LaunchAware); ok && launchAware.HandlesLaunch() {
-			strategyHandlesLaunch = true
-		}
-	}
-
-	autoLaunch := strings.EqualFold(os.Getenv("PINCHTAB_AUTO_LAUNCH"), "1") ||
-		strings.EqualFold(os.Getenv("PINCHTAB_AUTO_LAUNCH"), "true") ||
-		strings.EqualFold(os.Getenv("PINCHTAB_AUTO_LAUNCH"), "yes")
-	if autoLaunch && !strategyHandlesLaunch {
-		defaultProfile := os.Getenv("PINCHTAB_DEFAULT_PROFILE")
-		defaultProfileExplicit := defaultProfile != ""
-		defaultPort := os.Getenv("PINCHTAB_DEFAULT_PORT")
-
-		go func() {
-			time.Sleep(500 * time.Millisecond)
-			profileToLaunch := defaultProfile
-			if !defaultProfileExplicit {
-				list, err := profMgr.List()
-				if err != nil {
-					slog.Warn("auto-launch profile list failed", "err", err)
-				}
-				if len(list) > 0 {
-					profileToLaunch = list[0].Name
-				} else {
-					profileToLaunch = "default"
-					if err := os.MkdirAll(filepath.Join(profilesDir, profileToLaunch, "Default"), 0755); err != nil {
-						slog.Warn("failed to create auto-launch profile dir", "profile", profileToLaunch, "err", err)
-					}
-				}
-			}
-
-			headlessDefault := os.Getenv("PINCHTAB_HEADED") == ""
-			inst, err := orch.Launch(profileToLaunch, defaultPort, headlessDefault, nil)
-			if err != nil {
-				slog.Warn("auto-launch failed", "profile", profileToLaunch, "err", err)
-				return
-			}
-			slog.Info("auto-launched instance", "profile", profileToLaunch, "id", inst.ID, "port", inst.Port, "headless", headlessDefault)
-		}()
+	if err := activeStrategy.Start(context.Background()); err != nil {
+		slog.Error("strategy start failed", "strategy", activeStrategy.Name(), "err", err)
 	}
 
 	shutdownOnce := &sync.Once{}
 	doShutdown := func() {
 		shutdownOnce.Do(func() {
 			slog.Info("shutting down dashboard...")
-			if activeStrategy != nil {
-				if err := activeStrategy.Stop(); err != nil {
-					slog.Warn("strategy stop failed", "err", err)
-				}
+			if err := activeStrategy.Stop(); err != nil {
+				slog.Warn("strategy stop failed", "err", err)
 			}
 			if sched != nil {
 				sched.Stop()

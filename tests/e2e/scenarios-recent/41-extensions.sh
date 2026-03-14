@@ -76,6 +76,10 @@ fi
 
 if [ $DEFAULT_LOG_PASS -ne 0 ]; then
   print_extension_hints "$DEFAULT_INST_ID"
+  # Debug: dump full instance logs for analysis
+  echo "  ${YELLOW}📋 Full instance logs:${NC}"
+  PINCHTAB_URL=$ORCH_URL pt_get "/instances/${DEFAULT_INST_ID}/logs" >/dev/null
+  printf '%s\n' "$RESULT" | head -30 | sed 's/^/    /'
 fi
 
 end_test

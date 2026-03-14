@@ -127,6 +127,21 @@ pinchtab --version
 pinchtab --help
 ```
 
+### Shell Completion
+
+After installing the CLI globally, you can generate shell completions:
+
+```bash
+# Generate and install zsh completions
+pinchtab completion zsh > "${fpath[1]}/_pinchtab"
+
+# Generate bash completions
+pinchtab completion bash > /etc/bash_completion.d/pinchtab
+
+# Generate fish completions
+pinchtab completion fish > ~/.config/fish/completions/pinchtab.fish
+```
+
 ### Using a Custom Binary
 
 For Docker, development, or other custom setups:

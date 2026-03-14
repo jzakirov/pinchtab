@@ -7,11 +7,13 @@ name: Release
 #   2. Build Go binary + create GitHub release (goreleaser)
 #   3. Publish npm package (with postinstall binary download support)
 #   4. Build & push Docker images
+# See .github/RELEASING.md for the operational checklist.
 #
 # Secrets required:
 #   - NPM_TOKEN: npm authentication (https://docs.npmjs.com/creating-and-viewing-access-tokens)
 #   - DOCKERHUB_USER / DOCKERHUB_TOKEN: Docker Hub credentials
 #   - GITHUB_TOKEN: Automatic (GitHub Actions)
+#   - HOMEBREW_TAP_GITHUB_TOKEN: PAT with write access to pinchtab/homebrew-tap
 #
 # To create a release:
 #   git tag v0.7.0
@@ -68,6 +70,7 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
 
   npm:
     name: Publish to npm

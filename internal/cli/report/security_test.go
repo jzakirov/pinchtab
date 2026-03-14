@@ -57,7 +57,6 @@ func TestAssessSecurityWarnings(t *testing.T) {
 			"idpi_whitelist_not_set",
 			"idpi_warn_mode",
 			"idpi_content_protection_disabled",
-			"attach_enabled",
 			"attach_external_hosts",
 		} {
 			if !ids[expected] {
@@ -147,8 +146,8 @@ func TestAssessSecurityPosture(t *testing.T) {
 		}
 
 		posture := assessSecurityPosture(cfg)
-		if posture.Passed >= posture.Total/2 {
-			t.Fatalf("expected exposed posture below half-score, got %d/%d", posture.Passed, posture.Total)
+		if posture.Passed >= 3 {
+			t.Fatalf("expected exposed posture below 3 passed checks, got %d/%d", posture.Passed, posture.Total)
 		}
 		if posture.Level != "EXPOSED" {
 			t.Fatalf("expected EXPOSED posture, got %q", posture.Level)

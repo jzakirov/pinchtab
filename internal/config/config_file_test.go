@@ -16,8 +16,8 @@ func TestDefaultFileConfig(t *testing.T) {
 	if fc.InstanceDefaults.Mode != "headless" {
 		t.Errorf("DefaultFileConfig.InstanceDefaults.Mode = %v, want headless", fc.InstanceDefaults.Mode)
 	}
-	if fc.MultiInstance.Strategy != "simple" {
-		t.Errorf("DefaultFileConfig.MultiInstance.Strategy = %v, want simple", fc.MultiInstance.Strategy)
+	if fc.MultiInstance.Strategy != "always-on" {
+		t.Errorf("DefaultFileConfig.MultiInstance.Strategy = %v, want always-on", fc.MultiInstance.Strategy)
 	}
 	if len(fc.Security.Attach.AllowSchemes) != 2 || fc.Security.Attach.AllowSchemes[0] != "ws" || fc.Security.Attach.AllowSchemes[1] != "wss" {
 		t.Errorf("DefaultFileConfig.Security.Attach.AllowSchemes = %v, want [ws wss]", fc.Security.Attach.AllowSchemes)

@@ -76,8 +76,24 @@ These are the main local-control commands surfaced in the menu:
 | `pinchtab daemon` | Show daemon status and manage the background service |
 | `pinchtab config` | Open the interactive config overview/editor |
 | `pinchtab security` | Review or change the current security posture |
+| `pinchtab completion <shell>` | Generate shell completion scripts for `bash`, `zsh`, `fish`, or `powershell` |
 | `pinchtab bridge` | Start the single-instance bridge runtime |
 | `pinchtab mcp` | Start the stdio MCP server |
+
+## Shell Completion
+
+Use the built-in completion command to generate shell-specific scripts:
+
+```bash
+# Generate and install zsh completions
+pinchtab completion zsh > "${fpath[1]}/_pinchtab"
+
+# Generate bash completions
+pinchtab completion bash > /etc/bash_completion.d/pinchtab
+
+# Generate fish completions
+pinchtab completion fish > ~/.config/fish/completions/pinchtab.fish
+```
 
 ## Browser Shortcuts
 

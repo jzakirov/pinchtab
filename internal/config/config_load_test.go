@@ -59,8 +59,8 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if cfg.AllowEvaluate {
 		t.Errorf("default AllowEvaluate = %v, want false", cfg.AllowEvaluate)
 	}
-	if cfg.Strategy != "simple" {
-		t.Errorf("default Strategy = %v, want simple", cfg.Strategy)
+	if cfg.Strategy != "always-on" {
+		t.Errorf("default Strategy = %v, want always-on", cfg.Strategy)
 	}
 	if cfg.AllocationPolicy != "fcfs" {
 		t.Errorf("default AllocationPolicy = %v, want fcfs", cfg.AllocationPolicy)
@@ -68,8 +68,8 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if cfg.TabEvictionPolicy != "close_lru" {
 		t.Errorf("default TabEvictionPolicy = %v, want close_lru", cfg.TabEvictionPolicy)
 	}
-	if cfg.AttachEnabled {
-		t.Errorf("default AttachEnabled = %v, want false", cfg.AttachEnabled)
+	if !cfg.AttachEnabled {
+		t.Errorf("default AttachEnabled = %v, want true", cfg.AttachEnabled)
 	}
 	if len(cfg.AttachAllowSchemes) != 2 || cfg.AttachAllowSchemes[0] != "ws" || cfg.AttachAllowSchemes[1] != "wss" {
 		t.Errorf("default AttachAllowSchemes = %v, want [ws wss]", cfg.AttachAllowSchemes)

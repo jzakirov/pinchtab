@@ -253,6 +253,39 @@ curl -X POST /tab -H 'Content-Type: application/json' \
 
 Multi-tab: pass `?tabId=TARGET_ID` to snapshot/screenshot/text, or `"tabId"` in POST body.
 
+## Tab-specific endpoints
+
+All read/action endpoints have tab-scoped variants using `/tabs/{id}/...`:
+
+```bash
+# Navigate a specific tab
+curl -X POST /tabs/TARGET_ID/navigate \
+  -H 'Content-Type: application/json' \
+  -d '{"url": "https://pinchtab.com"}'
+
+# Snapshot a specific tab
+curl "/tabs/TARGET_ID/snapshot"
+curl "/tabs/TARGET_ID/snapshot?filter=interactive&format=compact"
+
+# Screenshot a specific tab
+curl "/tabs/TARGET_ID/screenshot?raw=true" -o tab-screenshot.jpg
+
+# Extract text from a specific tab
+curl "/tabs/TARGET_ID/text"
+
+# Action on a specific tab
+curl -X POST /tabs/TARGET_ID/action \
+  -H 'Content-Type: application/json' \
+  -d '{"kind": "click", "ref": "e5"}'
+
+# Batch actions on a specific tab
+curl -X POST /tabs/TARGET_ID/actions \
+  -H 'Content-Type: application/json' \
+  -d '{"actions": [{"kind": "click", "ref": "e3"}, {"kind": "type", "ref": "e3", "text": "hello"}]}'
+```
+
+These are equivalent to using `?tabId=TARGET_ID` on top-level endpoints but follow REST conventions. The tab ID comes from `/tabs` or from the `tabId` field in navigate/tab creation responses.
+
 ## Tab locking (multi-agent)
 
 ```bash

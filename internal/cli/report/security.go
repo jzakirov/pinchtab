@@ -53,12 +53,6 @@ func AssessSecurityPosture(cfg *config.RuntimeConfig) SecurityPosture {
 			Detail: formatEndpointStatus(cfg.EnabledSensitiveEndpoints()),
 		},
 		{
-			ID:     "attach_disabled",
-			Label:  "attach endpoint",
-			Passed: !cfg.AttachEnabled,
-			Detail: map[bool]string{true: "disabled", false: "enabled"}[!cfg.AttachEnabled],
-		},
-		{
 			ID:     "attach_local_only",
 			Label:  "attach host scope",
 			Passed: !attachAllowsNonLocalHosts(cfg.AttachAllowHosts),
@@ -196,19 +190,12 @@ func AssessSecurityWarnings(cfg *config.RuntimeConfig) []SecurityWarning {
 		}
 	}
 
-	if cfg.AttachEnabled {
+	if attachAllowsNonLocalHosts(cfg.AttachAllowHosts) {
 		warnings = append(warnings, SecurityWarning{
-			ID:      "attach_enabled",
-			Message: "attach endpoint enabled",
-			Attrs:   []any{"hint", "only attach to Chrome instances you trust"},
+			ID:      "attach_external_hosts",
+			Message: "attach allowHosts includes non-local hosts",
+			Attrs:   []any{"allowHosts", cfg.AttachAllowHosts, "hint", "keep security.attach.allowHosts limited to local addresses unless external Chrome instances are intentional"},
 		})
-		if attachAllowsNonLocalHosts(cfg.AttachAllowHosts) {
-			warnings = append(warnings, SecurityWarning{
-				ID:      "attach_external_hosts",
-				Message: "attach allowHosts includes non-local hosts",
-				Attrs:   []any{"allowHosts", cfg.AttachAllowHosts, "hint", "keep security.attach.allowHosts limited to local addresses unless external Chrome instances are intentional"},
-			})
-		}
 	}
 
 	return warnings
@@ -264,9 +251,9 @@ func securityPostureLevel(passed, total int) string {
 	switch {
 	case passed == total:
 		return "LOCKED"
-	case passed >= total-2:
+	case passed >= total-1:
 		return "GUARDED"
-	case passed >= total/2:
+	case passed >= 3:
 		return "ELEVATED"
 	default:
 		return "EXPOSED"

@@ -49,7 +49,7 @@ type RuntimeConfig struct {
 	WaitNavDelay    time.Duration
 
 	// Orchestrator settings (dashboard mode only)
-	Strategy           string        // "simple" (default), "explicit", or "simple-autorestart"
+	Strategy           string        // "always-on" (default), "simple", "explicit", or "simple-autorestart"
 	AllocationPolicy   string        // "fcfs" (default), "round_robin", "random"
 	RestartMaxRestarts int           // Max restart attempts for restart-managed strategies (-1 = unlimited, 0 = strategy default)
 	RestartInitBackoff time.Duration // Initial restart backoff (0 = strategy default)

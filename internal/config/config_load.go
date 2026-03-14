@@ -56,7 +56,7 @@ func Load() *RuntimeConfig {
 		WaitNavDelay:    1 * time.Second,
 
 		// Orchestrator defaults
-		Strategy:           "simple",
+		Strategy:           "always-on",
 		AllocationPolicy:   "fcfs",
 		RestartMaxRestarts: 20,
 		RestartInitBackoff: 2 * time.Second,
@@ -64,7 +64,7 @@ func Load() *RuntimeConfig {
 		RestartStableAfter: 5 * time.Minute,
 
 		// Attach defaults
-		AttachEnabled:      false,
+		AttachEnabled:      true,
 		AttachAllowHosts:   []string{"127.0.0.1", "localhost", "::1"},
 		AttachAllowSchemes: []string{"ws", "wss"},
 

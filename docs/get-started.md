@@ -52,6 +52,21 @@ go build -o pinchtab ./cmd/pinchtab
 
 **[Full build guide ->](architecture/building.md)**
 
+## Shell Completion
+
+After installation, you can generate shell completions from the CLI:
+
+```bash
+# Generate and install zsh completions
+pinchtab completion zsh > "${fpath[1]}/_pinchtab"
+
+# Generate bash completions
+pinchtab completion bash > /etc/bash_completion.d/pinchtab
+
+# Generate fish completions
+pinchtab completion fish > ~/.config/fish/completions/pinchtab.fish
+```
+
 ---
 
 ## Quick start

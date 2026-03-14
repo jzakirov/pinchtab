@@ -5,7 +5,8 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(dirname "$0")"
-source "${SCRIPT_DIR}/common.sh"
+COMMON_DIR="$(dirname "$SCRIPT_DIR")/scenarios"
+source "${COMMON_DIR}/common.sh"
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo -e "${BLUE}PinchTab E2E Recent Tests${NC}"
@@ -25,20 +26,13 @@ echo ""
 
 # Recent test files — add new scenarios here for fast CI feedback.
 # Move to the full suite (run-all.sh) once stable.
-RECENT_TESTS=(
-  "41-extensions.sh"
-  "42-lite-engine.sh"
-)
-
-for name in "${RECENT_TESTS[@]}"; do
-  script="${SCRIPT_DIR}/${name}"
+# All test files in this directory run as the recent suite.
+for script in "${SCRIPT_DIR}"/[0-9][0-9]-*.sh; do
   if [ -f "$script" ]; then
-    echo -e "${YELLOW}Running: ${name}${NC}"
+    echo -e "${YELLOW}Running: $(basename "$script")${NC}"
     echo ""
     source "$script"
     echo ""
-  else
-    echo -e "${RED}Missing: ${name}${NC}"
   fi
 done
 

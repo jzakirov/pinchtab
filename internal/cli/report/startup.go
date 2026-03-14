@@ -162,7 +162,7 @@ func SecurityLevelColor(level string) string {
 	case "GUARDED":
 		return string(colorWarning)
 	case "ELEVATED":
-		return string(colorDanger)
+		return string(colorWarning)
 	default:
 		return string(colorDanger)
 	}

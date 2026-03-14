@@ -90,26 +90,3 @@ func TestOrchestratorAware_AllStrategies(t *testing.T) {
 		}
 	}
 }
-
-func TestLaunchAware_Strategies(t *testing.T) {
-	tests := map[string]bool{
-		"simple":             false,
-		"explicit":           false,
-		"simple-autorestart": true,
-		"always-on":          true,
-	}
-
-	for name, want := range tests {
-		s, err := strategy.New(name)
-		if err != nil {
-			t.Fatalf("strategy %q not registered: %v", name, err)
-		}
-		launchAware, ok := s.(strategy.LaunchAware)
-		if !ok {
-			t.Fatalf("strategy %q does not implement LaunchAware", name)
-		}
-		if got := launchAware.HandlesLaunch(); got != want {
-			t.Errorf("strategy %q HandlesLaunch=%v, want %v", name, got, want)
-		}
-	}
-}
