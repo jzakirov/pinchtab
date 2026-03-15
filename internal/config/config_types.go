@@ -14,12 +14,14 @@ type RuntimeConfig struct {
 	StateDir          string
 
 	// Security settings
-	AllowEvaluate   bool
-	AllowMacro      bool
-	AllowScreencast bool
-	AllowDownload   bool
-	AllowUpload     bool
-	MaxRedirects    int // Max HTTP redirects (-1=unlimited, 0=none, default=-1)
+	AllowEvaluate    bool
+	AllowMacro       bool
+	AllowScreencast  bool
+	AllowRemoteInput bool // Allow sending mouse/keyboard input via screencast WebSocket
+	AllowShareUrls   bool // Allow generating shareable viewer URLs
+	AllowDownload    bool
+	AllowUpload      bool
+	MaxRedirects     int // Max HTTP redirects (-1=unlimited, 0=none, default=-1)
 
 	// Browser/instance settings
 	Headless          bool
@@ -166,14 +168,16 @@ type ProfilesConfig struct {
 }
 
 type SecurityConfig struct {
-	AllowEvaluate   *bool        `json:"allowEvaluate,omitempty"`
-	AllowMacro      *bool        `json:"allowMacro,omitempty"`
-	AllowScreencast *bool        `json:"allowScreencast,omitempty"`
-	AllowDownload   *bool        `json:"allowDownload,omitempty"`
-	AllowUpload     *bool        `json:"allowUpload,omitempty"`
-	MaxRedirects    *int         `json:"maxRedirects,omitempty"`
-	Attach          AttachConfig `json:"attach,omitempty"`
-	IDPI            IDPIConfig   `json:"idpi,omitempty"`
+	AllowEvaluate    *bool        `json:"allowEvaluate,omitempty"`
+	AllowMacro       *bool        `json:"allowMacro,omitempty"`
+	AllowScreencast  *bool        `json:"allowScreencast,omitempty"`
+	AllowRemoteInput *bool        `json:"allowRemoteInput,omitempty"`
+	AllowShareUrls   *bool        `json:"allowShareUrls,omitempty"`
+	AllowDownload    *bool        `json:"allowDownload,omitempty"`
+	AllowUpload      *bool        `json:"allowUpload,omitempty"`
+	MaxRedirects     *int         `json:"maxRedirects,omitempty"`
+	Attach           AttachConfig `json:"attach,omitempty"`
+	IDPI             IDPIConfig   `json:"idpi,omitempty"`
 }
 
 type MultiInstanceConfig struct {

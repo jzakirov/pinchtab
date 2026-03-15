@@ -149,6 +149,10 @@ func setSecurityField(s *SecurityConfig, field, value string) error {
 		s.AllowMacro = &b
 	case "allowScreencast":
 		s.AllowScreencast = &b
+	case "allowRemoteInput":
+		s.AllowRemoteInput = &b
+	case "allowShareUrls":
+		s.AllowShareUrls = &b
 	case "allowDownload":
 		s.AllowDownload = &b
 	case "allowUpload":
@@ -365,6 +369,10 @@ func getSecurityField(s *SecurityConfig, field string) (string, error) {
 		return formatBoolPtr(s.AllowMacro), nil
 	case "allowScreencast":
 		return formatBoolPtr(s.AllowScreencast), nil
+	case "allowRemoteInput":
+		return formatBoolPtr(s.AllowRemoteInput), nil
+	case "allowShareUrls":
+		return formatBoolPtr(s.AllowShareUrls), nil
 	case "allowDownload":
 		return formatBoolPtr(s.AllowDownload), nil
 	case "allowUpload":
@@ -662,6 +670,12 @@ func LoadFileConfig() (*FileConfig, string, error) {
 		}
 		if legacy.Security.AllowScreencast != nil {
 			fc.Security.AllowScreencast = legacy.Security.AllowScreencast
+		}
+		if legacy.Security.AllowRemoteInput != nil {
+			fc.Security.AllowRemoteInput = legacy.Security.AllowRemoteInput
+		}
+		if legacy.Security.AllowShareUrls != nil {
+			fc.Security.AllowShareUrls = legacy.Security.AllowShareUrls
 		}
 		if legacy.Security.AllowDownload != nil {
 			fc.Security.AllowDownload = legacy.Security.AllowDownload

@@ -22,6 +22,8 @@ func DefaultFileConfig() FileConfig {
 	allowEvaluate := false
 	allowMacro := false
 	allowScreencast := false
+	allowRemoteInput := false
+	allowShareUrls := false
 	allowDownload := false
 	allowUpload := false
 	maxRedirects := -1
@@ -46,12 +48,14 @@ func DefaultFileConfig() FileConfig {
 			TabEvictionPolicy: "close_lru",
 		},
 		Security: SecurityConfig{
-			AllowEvaluate:   &allowEvaluate,
-			AllowMacro:      &allowMacro,
-			AllowScreencast: &allowScreencast,
-			AllowDownload:   &allowDownload,
-			AllowUpload:     &allowUpload,
-			MaxRedirects:    &maxRedirects,
+			AllowEvaluate:    &allowEvaluate,
+			AllowMacro:       &allowMacro,
+			AllowScreencast:  &allowScreencast,
+			AllowRemoteInput: &allowRemoteInput,
+			AllowShareUrls:   &allowShareUrls,
+			AllowDownload:    &allowDownload,
+			AllowUpload:      &allowUpload,
+			MaxRedirects:     &maxRedirects,
 			Attach: AttachConfig{
 				Enabled:      &attachEnabled,
 				AllowHosts:   []string{"127.0.0.1", "localhost", "::1"},
@@ -148,14 +152,16 @@ type profilesConfigJSON struct {
 }
 
 type securityConfigJSON struct {
-	AllowEvaluate   *bool          `json:"allowEvaluate"`
-	AllowMacro      *bool          `json:"allowMacro"`
-	AllowScreencast *bool          `json:"allowScreencast"`
-	AllowDownload   *bool          `json:"allowDownload"`
-	AllowUpload     *bool          `json:"allowUpload"`
-	MaxRedirects    *int           `json:"maxRedirects"`
-	Attach          attachJSON     `json:"attach"`
-	IDPI            idpiConfigJSON `json:"idpi"`
+	AllowEvaluate    *bool          `json:"allowEvaluate"`
+	AllowMacro       *bool          `json:"allowMacro"`
+	AllowScreencast  *bool          `json:"allowScreencast"`
+	AllowRemoteInput *bool          `json:"allowRemoteInput"`
+	AllowShareUrls   *bool          `json:"allowShareUrls"`
+	AllowDownload    *bool          `json:"allowDownload"`
+	AllowUpload      *bool          `json:"allowUpload"`
+	MaxRedirects     *int           `json:"maxRedirects"`
+	Attach           attachJSON     `json:"attach"`
+	IDPI             idpiConfigJSON `json:"idpi"`
 }
 
 type attachJSON struct {
@@ -259,12 +265,14 @@ func (fc FileConfig) MarshalJSON() ([]byte, error) {
 			TabEvictionPolicy: fc.InstanceDefaults.TabEvictionPolicy,
 		},
 		Security: securityConfigJSON{
-			AllowEvaluate:   fc.Security.AllowEvaluate,
-			AllowMacro:      fc.Security.AllowMacro,
-			AllowScreencast: fc.Security.AllowScreencast,
-			AllowDownload:   fc.Security.AllowDownload,
-			AllowUpload:     fc.Security.AllowUpload,
-			MaxRedirects:    fc.Security.MaxRedirects,
+			AllowEvaluate:    fc.Security.AllowEvaluate,
+			AllowMacro:       fc.Security.AllowMacro,
+			AllowScreencast:  fc.Security.AllowScreencast,
+			AllowRemoteInput: fc.Security.AllowRemoteInput,
+			AllowShareUrls:   fc.Security.AllowShareUrls,
+			AllowDownload:    fc.Security.AllowDownload,
+			AllowUpload:      fc.Security.AllowUpload,
+			MaxRedirects:     fc.Security.MaxRedirects,
 			Attach: attachJSON{
 				Enabled:      fc.Security.Attach.Enabled,
 				AllowHosts:   copyStringSlice(fc.Security.Attach.AllowHosts),
@@ -339,6 +347,8 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 	allowEvaluate := cfg.AllowEvaluate
 	allowMacro := cfg.AllowMacro
 	allowScreencast := cfg.AllowScreencast
+	allowRemoteInput := cfg.AllowRemoteInput
+	allowShareUrls := cfg.AllowShareUrls
 	allowDownload := cfg.AllowDownload
 	allowUpload := cfg.AllowUpload
 	maxRedirects := cfg.MaxRedirects
@@ -394,12 +404,14 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 			TabEvictionPolicy: cfg.TabEvictionPolicy,
 		},
 		Security: SecurityConfig{
-			AllowEvaluate:   &allowEvaluate,
-			AllowMacro:      &allowMacro,
-			AllowScreencast: &allowScreencast,
-			AllowDownload:   &allowDownload,
-			AllowUpload:     &allowUpload,
-			MaxRedirects:    &maxRedirects,
+			AllowEvaluate:    &allowEvaluate,
+			AllowMacro:       &allowMacro,
+			AllowScreencast:  &allowScreencast,
+			AllowRemoteInput: &allowRemoteInput,
+			AllowShareUrls:   &allowShareUrls,
+			AllowDownload:    &allowDownload,
+			AllowUpload:      &allowUpload,
+			MaxRedirects:     &maxRedirects,
 			Attach: AttachConfig{
 				Enabled:      &attachEnabled,
 				AllowHosts:   append([]string(nil), cfg.AttachAllowHosts...),

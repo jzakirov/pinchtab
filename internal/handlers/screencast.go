@@ -3,12 +3,14 @@ package handlers
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"sync"
 	"time"
 
+	"github.com/chromedp/cdproto/input"
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 	"github.com/gobwas/ws"
@@ -16,7 +18,31 @@ import (
 	"github.com/pinchtab/pinchtab/internal/web"
 )
 
+// inputEvent represents a mouse/keyboard/scroll event from the viewer client.
+type inputEvent struct {
+	Type string `json:"type"`
+
+	// Mouse fields
+	X      float64 `json:"x"`
+	Y      float64 `json:"y"`
+	Button string  `json:"button,omitempty"` // "left", "middle", "right"
+
+	// Keyboard fields
+	Key  string `json:"key,omitempty"`  // W3C key value ("a", "Enter", etc.)
+	Code string `json:"code,omitempty"` // Physical key code ("KeyA", "Enter", etc.)
+
+	// Scroll fields
+	DeltaX float64 `json:"deltaX,omitempty"`
+	DeltaY float64 `json:"deltaY,omitempty"`
+
+	// Viewport dimensions from the client for coordinate scaling
+	ViewportWidth  float64 `json:"viewportWidth,omitempty"`
+	ViewportHeight float64 `json:"viewportHeight,omitempty"`
+}
+
 // HandleScreencast upgrades to WebSocket and streams screencast frames for a tab.
+// When security.allowRemoteInput is enabled, it also accepts input events from
+// the client (mouse, keyboard, scroll) and dispatches them via CDP.
 // Query params: tabId (required), quality (1-100, default 40), maxWidth (default 800), fps (1-30, default 5)
 func (h *Handlers) HandleScreencast(w http.ResponseWriter, r *http.Request) {
 	if !h.Config.AllowScreencast {
@@ -119,14 +145,32 @@ func (h *Handlers) HandleScreencast(w http.ResponseWriter, r *http.Request) {
 		)
 	}()
 
-	slog.Info("screencast started", "tab", tabID, "quality", quality, "maxWidth", maxWidth)
+	allowInput := h.Config.AllowRemoteInput
+	slog.Info("screencast started", "tab", tabID, "quality", quality, "maxWidth", maxWidth, "remoteInput", allowInput)
 
+	// Read goroutine: handles client messages (input events or disconnect detection)
 	go func() {
 		for {
-			_, _, err := wsutil.ReadClientData(conn)
+			data, op, err := wsutil.ReadClientData(conn)
 			if err != nil {
 				once.Do(func() { close(done) })
 				return
+			}
+			// Binary frames are screencast data (server→client only); ignore if received
+			if op == ws.OpBinary {
+				continue
+			}
+			// Text frames are input events from the viewer
+			if !allowInput || len(data) == 0 {
+				continue
+			}
+			var evt inputEvent
+			if err := json.Unmarshal(data, &evt); err != nil {
+				slog.Debug("screencast: invalid input event", "err", err)
+				continue
+			}
+			if dispatchErr := dispatchInputEvent(ctx, evt); dispatchErr != nil {
+				slog.Debug("screencast: input dispatch failed", "type", evt.Type, "err", dispatchErr)
 			}
 		}
 	}()
@@ -144,6 +188,116 @@ func (h *Handlers) HandleScreencast(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+	}
+}
+
+// dispatchInputEvent translates a viewer input event into CDP Input domain calls.
+func dispatchInputEvent(ctx context.Context, evt inputEvent) error {
+	switch evt.Type {
+	case "mousemove":
+		return chromedp.Run(ctx, chromedp.ActionFunc(func(c context.Context) error {
+			return input.DispatchMouseEvent(input.MouseMoved, evt.X, evt.Y).Do(c)
+		}))
+
+	case "mousedown":
+		btn := toMouseButton(evt.Button)
+		return chromedp.Run(ctx, chromedp.ActionFunc(func(c context.Context) error {
+			return input.DispatchMouseEvent(input.MousePressed, evt.X, evt.Y).
+				WithButton(btn).
+				WithClickCount(1).
+				Do(c)
+		}))
+
+	case "mouseup":
+		btn := toMouseButton(evt.Button)
+		return chromedp.Run(ctx, chromedp.ActionFunc(func(c context.Context) error {
+			return input.DispatchMouseEvent(input.MouseReleased, evt.X, evt.Y).
+				WithButton(btn).
+				WithClickCount(1).
+				Do(c)
+		}))
+
+	case "click":
+		btn := toMouseButton(evt.Button)
+		err := chromedp.Run(ctx,
+			chromedp.ActionFunc(func(c context.Context) error {
+				return input.DispatchMouseEvent(input.MousePressed, evt.X, evt.Y).
+					WithButton(btn).
+					WithClickCount(1).
+					Do(c)
+			}),
+			chromedp.ActionFunc(func(c context.Context) error {
+				return input.DispatchMouseEvent(input.MouseReleased, evt.X, evt.Y).
+					WithButton(btn).
+					WithClickCount(1).
+					Do(c)
+			}),
+		)
+		return err
+
+	case "keydown":
+		return chromedp.Run(ctx, chromedp.ActionFunc(func(c context.Context) error {
+			p := input.DispatchKeyEvent(input.KeyRawDown).
+				WithKey(evt.Key).
+				WithCode(evt.Code)
+			if len(evt.Key) == 1 {
+				p = p.WithText(evt.Key)
+			}
+			return p.Do(c)
+		}))
+
+	case "keyup":
+		return chromedp.Run(ctx, chromedp.ActionFunc(func(c context.Context) error {
+			return input.DispatchKeyEvent(input.KeyUp).
+				WithKey(evt.Key).
+				WithCode(evt.Code).
+				Do(c)
+		}))
+
+	case "keypress":
+		// For printable characters, send the full keydown + char + keyup sequence
+		return chromedp.Run(ctx,
+			chromedp.ActionFunc(func(c context.Context) error {
+				return input.DispatchKeyEvent(input.KeyRawDown).
+					WithKey(evt.Key).
+					WithCode(evt.Code).
+					Do(c)
+			}),
+			chromedp.ActionFunc(func(c context.Context) error {
+				if len(evt.Key) == 1 {
+					return input.InsertText(evt.Key).Do(c)
+				}
+				return nil
+			}),
+			chromedp.ActionFunc(func(c context.Context) error {
+				return input.DispatchKeyEvent(input.KeyUp).
+					WithKey(evt.Key).
+					WithCode(evt.Code).
+					Do(c)
+			}),
+		)
+
+	case "scroll":
+		return chromedp.Run(ctx, chromedp.ActionFunc(func(c context.Context) error {
+			return input.DispatchMouseEvent(input.MouseWheel, evt.X, evt.Y).
+				WithDeltaX(evt.DeltaX).
+				WithDeltaY(evt.DeltaY).
+				Do(c)
+		}))
+
+	default:
+		return fmt.Errorf("unknown input event type: %s", evt.Type)
+	}
+}
+
+func toMouseButton(btn string) input.MouseButton {
+	switch btn {
+	case "middle":
+		return input.Middle
+	case "right":
+		return input.Right
+	default:
+		return input.Left
 	}
 }
 

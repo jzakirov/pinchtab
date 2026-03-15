@@ -12,3 +12,6 @@ var ReadabilityJS string
 
 //go:embed welcome.html
 var WelcomeHTML string
+
+//go:embed viewer.html
+var ViewerHTML string
