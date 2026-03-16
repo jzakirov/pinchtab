@@ -12,46 +12,117 @@
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    min-height: 100vh;
+    height: 100vh;
+    overflow: hidden;
   }
-  #toolbar {
+
+  /* --- Tab bar --- */
+  #tab-bar {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 8px 16px;
+    background: #0f1729;
+    border-bottom: 1px solid #1e2d4a;
+    min-height: 36px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    flex-shrink: 0;
+  }
+  #tab-bar::-webkit-scrollbar { height: 2px; }
+  .tab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    font-size: 12px;
+    color: #8892a4;
+    cursor: pointer;
+    border-right: 1px solid #1e2d4a;
+    white-space: nowrap;
+    max-width: 200px;
+    overflow: hidden;
+    flex-shrink: 0;
+    user-select: none;
+  }
+  .tab:hover { background: #16213e; color: #c0c8d8; }
+  .tab.active { background: #1a2744; color: #e0e8f0; border-bottom: 2px solid #e94560; }
+  .tab-title { overflow: hidden; text-overflow: ellipsis; }
+  .tab-close {
+    font-size: 14px; color: #556; cursor: pointer; margin-left: 4px;
+    border-radius: 3px; width: 16px; height: 16px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .tab-close:hover { background: #e94560; color: #fff; }
+
+  /* --- Navigation bar --- */
+  #nav-bar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
     background: #16213e;
-    width: 100%;
     border-bottom: 1px solid #0f3460;
+    flex-shrink: 0;
+  }
+  .nav-btn {
+    background: none;
+    border: 1px solid transparent;
+    color: #8892a4;
+    cursor: pointer;
+    font-size: 16px;
+    width: 30px; height: 30px;
+    border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .nav-btn:hover { background: #1e2d4a; color: #e0e0e0; }
+  .nav-btn:active { background: #0f3460; }
+  #url-input {
+    flex: 1;
+    background: #0f1729;
+    border: 1px solid #1e2d4a;
+    border-radius: 16px;
+    padding: 5px 14px;
+    color: #c0c8d8;
     font-size: 13px;
+    outline: none;
+    min-width: 0;
   }
-  #toolbar .logo { font-weight: 700; color: #e94560; }
-  #toolbar .status {
-    display: inline-block;
-    width: 8px; height: 8px;
-    border-radius: 50%;
-    background: #666;
+  #url-input:focus { border-color: #e94560; }
+
+  /* --- Status bar --- */
+  #status-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 12px;
+    background: #0f1729;
+    border-bottom: 1px solid #1e2d4a;
+    font-size: 11px;
+    color: #556;
+    flex-shrink: 0;
   }
-  #toolbar .status.connected { background: #4caf50; }
-  #toolbar .status.error { background: #e94560; }
-  #toolbar .info { color: #888; margin-left: auto; }
+  #status-bar .dot {
+    width: 6px; height: 6px; border-radius: 50%; background: #666; flex-shrink: 0;
+  }
+  #status-bar .dot.ok { background: #4caf50; }
+  #status-bar .dot.err { background: #e94560; }
+
+  /* --- Canvas container --- */
   #container {
     flex: 1;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 16px;
-    width: 100%;
+    overflow: hidden;
+    background: #111;
   }
   #viewer-canvas {
     cursor: default;
     max-width: 100%;
-    max-height: calc(100vh - 50px);
-    border: 1px solid #0f3460;
-    border-radius: 4px;
+    max-height: 100%;
     image-rendering: -webkit-optimize-contrast;
   }
-  #viewer-canvas:focus { outline: 2px solid #e94560; }
+  #viewer-canvas:focus { outline: none; }
   #error-msg {
     color: #e94560;
     text-align: center;
@@ -61,12 +132,22 @@
 </style>
 </head>
 <body>
-<div id="toolbar">
-  <span class="logo">PinchTab</span>
-  <span id="status" class="status"></span>
-  <span id="status-text">Connecting...</span>
-  <span class="info" id="fps-display"></span>
+
+<div id="tab-bar"></div>
+
+<div id="nav-bar">
+  <button class="nav-btn" id="btn-back" title="Back">&#9664;</button>
+  <button class="nav-btn" id="btn-forward" title="Forward">&#9654;</button>
+  <button class="nav-btn" id="btn-reload" title="Reload">&#8635;</button>
+  <input type="text" id="url-input" placeholder="Enter URL or search..." spellcheck="false" autocomplete="off">
 </div>
+
+<div id="status-bar">
+  <span class="dot" id="status-dot"></span>
+  <span id="status-text">Connecting...</span>
+  <span style="margin-left:auto" id="fps-display"></span>
+</div>
+
 <div id="container">
   <canvas id="viewer-canvas" tabindex="0"></canvas>
 </div>
@@ -74,159 +155,274 @@
 
 <script>
 (function() {
-  const params = new URLSearchParams(window.location.search);
-  const shareToken = params.get("token") || "";
-  const tabId = params.get("tabId") || "";
-  const quality = parseInt(params.get("quality") || "60", 10);
-  const maxWidth = parseInt(params.get("maxWidth") || "1280", 10);
-  const fps = parseInt(params.get("fps") || "15", 10);
+  var params = new URLSearchParams(location.search);
+  var shareToken = params.get("token") || "";
+  var currentTabId = params.get("tabId") || "";
+  var quality = parseInt(params.get("quality") || "60", 10);
+  var maxWidth = parseInt(params.get("maxWidth") || "1280", 10);
+  var fps = parseInt(params.get("fps") || "15", 10);
 
-  const canvas = document.getElementById("viewer-canvas");
-  const ctx = canvas.getContext("2d");
-  const statusEl = document.getElementById("status");
-  const statusText = document.getElementById("status-text");
-  const fpsDisplay = document.getElementById("fps-display");
-  const errorMsg = document.getElementById("error-msg");
+  var canvas = document.getElementById("viewer-canvas");
+  var drawCtx = canvas.getContext("2d");
+  var statusDot = document.getElementById("status-dot");
+  var statusText = document.getElementById("status-text");
+  var fpsDisplay = document.getElementById("fps-display");
+  var errorMsg = document.getElementById("error-msg");
+  var urlInput = document.getElementById("url-input");
+  var tabBar = document.getElementById("tab-bar");
 
-  // Track the actual rendered image size vs canvas CSS size for coordinate mapping
-  let imgWidth = 0, imgHeight = 0;
-  let frameCount = 0;
-  let lastFpsTime = Date.now();
+  var imgWidth = 0, imgHeight = 0;
+  var frameCount = 0, lastFpsTime = Date.now();
+  var activeWs = null;
+  var tabs = [];
+  var tabPollTimer = null;
 
-  function buildWsUrl() {
-    const proto = location.protocol === "https:" ? "wss:" : "ws:";
-    const base = `${proto}//${location.host}/screencast`;
-    const p = new URLSearchParams();
+  function authParam() {
+    var apiToken = params.get("apiToken") || "";
+    if (apiToken) return "token=" + encodeURIComponent(apiToken);
+    if (shareToken) return "token=" + encodeURIComponent(shareToken);
+    return "";
+  }
+
+  function buildWsUrl(tabId) {
+    var proto = location.protocol === "https:" ? "wss:" : "ws:";
+    var p = new URLSearchParams();
     if (tabId) p.set("tabId", tabId);
     p.set("quality", String(quality));
     p.set("maxWidth", String(maxWidth));
     p.set("fps", String(fps));
-    // Pass the main API token if present, OR the share token for auth
-    const apiToken = params.get("apiToken") || "";
-    if (apiToken) p.set("token", apiToken);
-    else if (shareToken) p.set("token", shareToken);
-    return `${base}?${p.toString()}`;
+    var a = authParam();
+    if (a) p.set("token", a.split("=")[1]);
+    return proto + "//" + location.host + "/screencast?" + p.toString();
   }
 
+  // --- Tab bar rendering ---
+  function renderTabs() {
+    tabBar.innerHTML = "";
+    tabs.forEach(function(t) {
+      var el = document.createElement("div");
+      el.className = "tab" + (t.id === currentTabId ? " active" : "");
+
+      var title = document.createElement("span");
+      title.className = "tab-title";
+      title.textContent = t.title || t.url || "New Tab";
+      el.appendChild(title);
+
+      el.addEventListener("click", function(e) {
+        if (e.target.classList.contains("tab-close")) return;
+        switchTab(t.id);
+      });
+
+      tabBar.appendChild(el);
+    });
+  }
+
+  function switchTab(tabId) {
+    if (tabId === currentTabId) return;
+    currentTabId = tabId;
+    // Reconnect screencast to new tab
+    if (activeWs) {
+      activeWs.onclose = null; // prevent reconnect
+      activeWs.close();
+    }
+    connect();
+  }
+
+  // --- WebSocket connection ---
   function connect() {
-    const ws = new WebSocket(buildWsUrl());
+    var ws = new WebSocket(buildWsUrl(currentTabId));
     ws.binaryType = "arraybuffer";
+    activeWs = ws;
 
     ws.onopen = function() {
-      statusEl.className = "status connected";
+      statusDot.className = "dot ok";
       statusText.textContent = "Connected";
       canvas.focus();
+      // Request initial data
+      sendInput({ type: "getUrl" });
+      sendInput({ type: "getTabs" });
+      // Poll tabs periodically
+      clearInterval(tabPollTimer);
+      tabPollTimer = setInterval(function() { sendInput({ type: "getTabs" }); }, 5000);
     };
 
     ws.onclose = function() {
-      statusEl.className = "status error";
+      statusDot.className = "dot err";
       statusText.textContent = "Disconnected - reconnecting...";
+      clearInterval(tabPollTimer);
       setTimeout(connect, 2000);
     };
 
     ws.onerror = function() {
-      statusEl.className = "status error";
+      statusDot.className = "dot err";
       statusText.textContent = "Connection error";
     };
 
     ws.onmessage = function(evt) {
-      if (!(evt.data instanceof ArrayBuffer)) return;
-      const blob = new Blob([evt.data], { type: "image/jpeg" });
-      const url = URL.createObjectURL(blob);
-      const img = new Image();
-      img.onload = function() {
-        if (canvas.width !== img.width || canvas.height !== img.height) {
-          canvas.width = img.width;
-          canvas.height = img.height;
-        }
-        imgWidth = img.width;
-        imgHeight = img.height;
-        ctx.drawImage(img, 0, 0);
-        URL.revokeObjectURL(url);
-
-        frameCount++;
-        const now = Date.now();
-        if (now - lastFpsTime >= 1000) {
-          fpsDisplay.textContent = `${frameCount} fps | ${img.width}x${img.height}`;
-          frameCount = 0;
-          lastFpsTime = now;
-        }
-      };
-      img.src = url;
+      // Binary = JPEG frame
+      if (evt.data instanceof ArrayBuffer) {
+        renderFrame(evt.data);
+        return;
+      }
+      // Text = JSON server message
+      try {
+        var msg = JSON.parse(evt.data);
+        handleServerMsg(msg);
+      } catch(e) {}
     };
 
-    // --- Input event forwarding ---
-
+    // --- Input forwarding ---
     function scaleCoords(clientX, clientY) {
-      const rect = canvas.getBoundingClientRect();
-      const scaleX = imgWidth / rect.width;
-      const scaleY = imgHeight / rect.height;
+      var rect = canvas.getBoundingClientRect();
       return {
-        x: (clientX - rect.left) * scaleX,
-        y: (clientY - rect.top) * scaleY,
+        x: (clientX - rect.left) * (imgWidth / rect.width),
+        y: (clientY - rect.top) * (imgHeight / rect.height),
       };
-    }
-
-    function sendInput(evt) {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify(evt));
-      }
     }
 
     function buttonName(b) {
-      if (b === 1) return "middle";
-      if (b === 2) return "right";
-      return "left";
+      return b === 1 ? "middle" : b === 2 ? "right" : "left";
     }
 
-    canvas.addEventListener("mousemove", function(e) {
-      const c = scaleCoords(e.clientX, e.clientY);
+    canvas.onmousemove = function(e) {
+      var c = scaleCoords(e.clientX, e.clientY);
       sendInput({ type: "mousemove", x: c.x, y: c.y });
-    });
+    };
 
-    canvas.addEventListener("mousedown", function(e) {
+    canvas.onmousedown = function(e) {
       e.preventDefault();
       canvas.focus();
-      const c = scaleCoords(e.clientX, e.clientY);
+      var c = scaleCoords(e.clientX, e.clientY);
       sendInput({ type: "mousedown", x: c.x, y: c.y, button: buttonName(e.button) });
-    });
+    };
 
-    canvas.addEventListener("mouseup", function(e) {
+    canvas.onmouseup = function(e) {
       e.preventDefault();
-      const c = scaleCoords(e.clientX, e.clientY);
+      var c = scaleCoords(e.clientX, e.clientY);
       sendInput({ type: "mouseup", x: c.x, y: c.y, button: buttonName(e.button) });
-    });
+    };
 
-    canvas.addEventListener("wheel", function(e) {
+    canvas.onwheel = function(e) {
       e.preventDefault();
-      const c = scaleCoords(e.clientX, e.clientY);
+      var c = scaleCoords(e.clientX, e.clientY);
       sendInput({ type: "scroll", x: c.x, y: c.y, deltaX: e.deltaX, deltaY: e.deltaY });
-    }, { passive: false });
+    };
 
-    canvas.addEventListener("contextmenu", function(e) { e.preventDefault(); });
+    canvas.oncontextmenu = function(e) { e.preventDefault(); };
 
-    canvas.addEventListener("keydown", function(e) {
+    canvas.onkeydown = function(e) {
+      // Let Ctrl+V through for paste handling
+      if ((e.ctrlKey || e.metaKey) && e.key === "v") {
+        e.preventDefault();
+        navigator.clipboard.readText().then(function(text) {
+          if (text) sendInput({ type: "paste", text: text });
+        }).catch(function() {});
+        return;
+      }
+      // Ctrl+C: copy from remote (not implemented yet, just prevent default)
+      if ((e.ctrlKey || e.metaKey) && (e.key === "c" || e.key === "a")) {
+        // Let these pass through to the remote browser
+      }
       e.preventDefault();
-      // For printable single characters, use keypress type to get proper text insertion
       if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
         sendInput({ type: "keypress", key: e.key, code: e.code });
       } else {
         sendInput({ type: "keydown", key: e.key, code: e.code });
       }
-    });
+    };
 
-    canvas.addEventListener("keyup", function(e) {
+    canvas.onkeyup = function(e) {
       e.preventDefault();
-      // Don't send keyup for keys we handled as keypress (they include their own keyup)
       if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) return;
       sendInput({ type: "keyup", key: e.key, code: e.code });
-    });
+    };
   }
 
-  // Validate share token if provided
+  function sendInput(evt) {
+    if (activeWs && activeWs.readyState === WebSocket.OPEN) {
+      activeWs.send(JSON.stringify(evt));
+    }
+  }
+
+  function renderFrame(data) {
+    var blob = new Blob([data], { type: "image/jpeg" });
+    var url = URL.createObjectURL(blob);
+    var img = new Image();
+    img.onload = function() {
+      if (canvas.width !== img.width || canvas.height !== img.height) {
+        canvas.width = img.width;
+        canvas.height = img.height;
+      }
+      imgWidth = img.width;
+      imgHeight = img.height;
+      drawCtx.drawImage(img, 0, 0);
+      URL.revokeObjectURL(url);
+
+      frameCount++;
+      var now = Date.now();
+      if (now - lastFpsTime >= 1000) {
+        fpsDisplay.textContent = frameCount + " fps | " + img.width + "x" + img.height;
+        frameCount = 0;
+        lastFpsTime = now;
+      }
+    };
+    img.src = url;
+  }
+
+  function handleServerMsg(msg) {
+    switch (msg.type) {
+      case "urlChanged":
+        if (msg.data && msg.data.url) {
+          urlInput.value = msg.data.url;
+          document.title = (msg.data.title || "PinchTab") + " - Viewer";
+        }
+        break;
+      case "tabs":
+        if (Array.isArray(msg.data)) {
+          tabs = msg.data;
+          // Auto-set currentTabId if not set
+          if (!currentTabId && tabs.length > 0) {
+            currentTabId = tabs[0].id;
+          }
+          renderTabs();
+        }
+        break;
+    }
+  }
+
+  // --- Navigation bar ---
+  document.getElementById("btn-back").onclick = function() { sendInput({ type: "back" }); };
+  document.getElementById("btn-forward").onclick = function() { sendInput({ type: "forward" }); };
+  document.getElementById("btn-reload").onclick = function() { sendInput({ type: "reload" }); };
+
+  urlInput.addEventListener("keydown", function(e) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      var val = urlInput.value.trim();
+      if (!val) return;
+      // Auto-prefix https:// if no protocol
+      if (!/^https?:\/\//i.test(val)) {
+        // If it looks like a domain, add https://
+        if (/^[\w-]+\.[\w.-]+/.test(val)) {
+          val = "https://" + val;
+        } else {
+          // Treat as Google search
+          val = "https://www.google.com/search?q=" + encodeURIComponent(val);
+        }
+      }
+      urlInput.value = val;
+      sendInput({ type: "navigate", url: val });
+      canvas.focus();
+    }
+  });
+
+  // Focus canvas when clicking it
+  canvas.addEventListener("click", function() { canvas.focus(); });
+
+  // --- Init ---
   if (shareToken) {
-    fetch(`/share/validate?token=${encodeURIComponent(shareToken)}`)
-      .then(r => {
+    fetch("/share/validate?token=" + encodeURIComponent(shareToken))
+      .then(function(r) {
         if (!r.ok) {
           errorMsg.textContent = "Invalid or expired share link.";
           errorMsg.style.display = "block";
@@ -235,7 +431,7 @@
         }
         connect();
       })
-      .catch(() => connect()); // If validate endpoint doesn't exist yet, try connecting anyway
+      .catch(function() { connect(); });
   } else {
     connect();
   }

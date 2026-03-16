@@ -15,10 +15,11 @@ import (
 	"github.com/chromedp/chromedp"
 	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
+	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/web"
 )
 
-// inputEvent represents a mouse/keyboard/scroll event from the viewer client.
+// inputEvent represents a mouse/keyboard/scroll/navigation event from the viewer client.
 type inputEvent struct {
 	Type string `json:"type"`
 
@@ -35,14 +36,25 @@ type inputEvent struct {
 	DeltaX float64 `json:"deltaX,omitempty"`
 	DeltaY float64 `json:"deltaY,omitempty"`
 
-	// Viewport dimensions from the client for coordinate scaling
-	ViewportWidth  float64 `json:"viewportWidth,omitempty"`
-	ViewportHeight float64 `json:"viewportHeight,omitempty"`
+	// Navigation fields
+	URL string `json:"url,omitempty"` // for "navigate" type
+
+	// Paste field
+	Text string `json:"text,omitempty"` // for "paste" type
+
+	// Tab fields
+	TabID string `json:"tabId,omitempty"` // for "switchTab" type
+}
+
+// serverMessage is a JSON message sent from server to client over the WebSocket.
+type serverMessage struct {
+	Type string `json:"type"`
+	Data any    `json:"data"`
 }
 
 // HandleScreencast upgrades to WebSocket and streams screencast frames for a tab.
 // When security.allowRemoteInput is enabled, it also accepts input events from
-// the client (mouse, keyboard, scroll) and dispatches them via CDP.
+// the client (mouse, keyboard, scroll, navigation, paste) and dispatches them via CDP.
 // Query params: tabId (required), quality (1-100, default 40), maxWidth (default 800), fps (1-30, default 5)
 func (h *Handlers) HandleScreencast(w http.ResponseWriter, r *http.Request) {
 	if !h.Config.AllowScreencast {
@@ -86,6 +98,7 @@ func (h *Handlers) HandleScreencast(w http.ResponseWriter, r *http.Request) {
 	}
 
 	frameCh := make(chan []byte, 3)
+	msgCh := make(chan []byte, 8) // server→client JSON messages (tabs, url updates)
 	var once sync.Once
 	done := make(chan struct{})
 
@@ -148,6 +161,12 @@ func (h *Handlers) HandleScreencast(w http.ResponseWriter, r *http.Request) {
 	allowInput := h.Config.AllowRemoteInput
 	slog.Info("screencast started", "tab", tabID, "quality", quality, "maxWidth", maxWidth, "remoteInput", allowInput)
 
+	// Send initial page info
+	go func() {
+		sendServerMsg(msgCh, "urlChanged", h.getPageInfo(ctx))
+		sendServerMsg(msgCh, "tabs", h.getTabList())
+	}()
+
 	// Read goroutine: handles client messages (input events or disconnect detection)
 	go func() {
 		for {
@@ -156,11 +175,9 @@ func (h *Handlers) HandleScreencast(w http.ResponseWriter, r *http.Request) {
 				once.Do(func() { close(done) })
 				return
 			}
-			// Binary frames are screencast data (server→client only); ignore if received
 			if op == ws.OpBinary {
 				continue
 			}
-			// Text frames are input events from the viewer
 			if !allowInput || len(data) == 0 {
 				continue
 			}
@@ -169,7 +186,7 @@ func (h *Handlers) HandleScreencast(w http.ResponseWriter, r *http.Request) {
 				slog.Debug("screencast: invalid input event", "err", err)
 				continue
 			}
-			if dispatchErr := dispatchInputEvent(ctx, evt); dispatchErr != nil {
+			if dispatchErr := h.dispatchInputEvent(ctx, evt, msgCh); dispatchErr != nil {
 				slog.Debug("screencast: input dispatch failed", "type", evt.Type, "err", dispatchErr)
 			}
 		}
@@ -179,6 +196,10 @@ func (h *Handlers) HandleScreencast(w http.ResponseWriter, r *http.Request) {
 		select {
 		case frame := <-frameCh:
 			if err := wsutil.WriteServerBinary(conn, frame); err != nil {
+				return
+			}
+		case msg := <-msgCh:
+			if err := wsutil.WriteServerText(conn, msg); err != nil {
 				return
 			}
 		case <-done:
@@ -191,8 +212,8 @@ func (h *Handlers) HandleScreencast(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// dispatchInputEvent translates a viewer input event into CDP Input domain calls.
-func dispatchInputEvent(ctx context.Context, evt inputEvent) error {
+// dispatchInputEvent translates a viewer input event into CDP calls.
+func (h *Handlers) dispatchInputEvent(ctx context.Context, evt inputEvent, msgCh chan<- []byte) error {
 	switch evt.Type {
 	case "mousemove":
 		return chromedp.Run(ctx, chromedp.ActionFunc(func(c context.Context) error {
@@ -219,27 +240,21 @@ func dispatchInputEvent(ctx context.Context, evt inputEvent) error {
 
 	case "click":
 		btn := toMouseButton(evt.Button)
-		err := chromedp.Run(ctx,
+		return chromedp.Run(ctx,
 			chromedp.ActionFunc(func(c context.Context) error {
 				return input.DispatchMouseEvent(input.MousePressed, evt.X, evt.Y).
-					WithButton(btn).
-					WithClickCount(1).
-					Do(c)
+					WithButton(btn).WithClickCount(1).Do(c)
 			}),
 			chromedp.ActionFunc(func(c context.Context) error {
 				return input.DispatchMouseEvent(input.MouseReleased, evt.X, evt.Y).
-					WithButton(btn).
-					WithClickCount(1).
-					Do(c)
+					WithButton(btn).WithClickCount(1).Do(c)
 			}),
 		)
-		return err
 
 	case "keydown":
 		return chromedp.Run(ctx, chromedp.ActionFunc(func(c context.Context) error {
 			p := input.DispatchKeyEvent(input.KeyRawDown).
-				WithKey(evt.Key).
-				WithCode(evt.Code)
+				WithKey(evt.Key).WithCode(evt.Code)
 			if len(evt.Key) == 1 {
 				p = p.WithText(evt.Key)
 			}
@@ -249,19 +264,14 @@ func dispatchInputEvent(ctx context.Context, evt inputEvent) error {
 	case "keyup":
 		return chromedp.Run(ctx, chromedp.ActionFunc(func(c context.Context) error {
 			return input.DispatchKeyEvent(input.KeyUp).
-				WithKey(evt.Key).
-				WithCode(evt.Code).
-				Do(c)
+				WithKey(evt.Key).WithCode(evt.Code).Do(c)
 		}))
 
 	case "keypress":
-		// For printable characters, send the full keydown + char + keyup sequence
 		return chromedp.Run(ctx,
 			chromedp.ActionFunc(func(c context.Context) error {
 				return input.DispatchKeyEvent(input.KeyRawDown).
-					WithKey(evt.Key).
-					WithCode(evt.Code).
-					Do(c)
+					WithKey(evt.Key).WithCode(evt.Code).Do(c)
 			}),
 			chromedp.ActionFunc(func(c context.Context) error {
 				if len(evt.Key) == 1 {
@@ -271,22 +281,144 @@ func dispatchInputEvent(ctx context.Context, evt inputEvent) error {
 			}),
 			chromedp.ActionFunc(func(c context.Context) error {
 				return input.DispatchKeyEvent(input.KeyUp).
-					WithKey(evt.Key).
-					WithCode(evt.Code).
-					Do(c)
+					WithKey(evt.Key).WithCode(evt.Code).Do(c)
 			}),
 		)
 
 	case "scroll":
 		return chromedp.Run(ctx, chromedp.ActionFunc(func(c context.Context) error {
 			return input.DispatchMouseEvent(input.MouseWheel, evt.X, evt.Y).
-				WithDeltaX(evt.DeltaX).
-				WithDeltaY(evt.DeltaY).
-				Do(c)
+				WithDeltaX(evt.DeltaX).WithDeltaY(evt.DeltaY).Do(c)
 		}))
+
+	case "paste":
+		if evt.Text == "" {
+			return nil
+		}
+		return chromedp.Run(ctx, chromedp.ActionFunc(func(c context.Context) error {
+			return input.InsertText(evt.Text).Do(c)
+		}))
+
+	case "navigate":
+		if evt.URL == "" {
+			return nil
+		}
+		err := bridge.NavigatePage(ctx, evt.URL)
+		if err == nil {
+			// Send updated URL back to viewer
+			go func() {
+				time.Sleep(500 * time.Millisecond) // let page start loading
+				sendServerMsg(msgCh, "urlChanged", h.getPageInfo(ctx))
+			}()
+		}
+		return err
+
+	case "back":
+		err := chromedp.Run(ctx, chromedp.ActionFunc(func(c context.Context) error {
+			idx, entries, histErr := page.GetNavigationHistory().Do(c)
+			if histErr != nil {
+				return histErr
+			}
+			if idx > 0 {
+				return page.NavigateToHistoryEntry(entries[idx-1].ID).Do(c)
+			}
+			return nil
+		}))
+		if err == nil {
+			go func() {
+				time.Sleep(500 * time.Millisecond)
+				sendServerMsg(msgCh, "urlChanged", h.getPageInfo(ctx))
+			}()
+		}
+		return err
+
+	case "forward":
+		err := chromedp.Run(ctx, chromedp.ActionFunc(func(c context.Context) error {
+			idx, entries, histErr := page.GetNavigationHistory().Do(c)
+			if histErr != nil {
+				return histErr
+			}
+			if idx < int64(len(entries)-1) {
+				return page.NavigateToHistoryEntry(entries[idx+1].ID).Do(c)
+			}
+			return nil
+		}))
+		if err == nil {
+			go func() {
+				time.Sleep(500 * time.Millisecond)
+				sendServerMsg(msgCh, "urlChanged", h.getPageInfo(ctx))
+			}()
+		}
+		return err
+
+	case "reload":
+		err := chromedp.Run(ctx, chromedp.ActionFunc(func(c context.Context) error {
+			return page.Reload().Do(c)
+		}))
+		if err == nil {
+			go func() {
+				time.Sleep(500 * time.Millisecond)
+				sendServerMsg(msgCh, "urlChanged", h.getPageInfo(ctx))
+			}()
+		}
+		return err
+
+	case "getTabs":
+		sendServerMsg(msgCh, "tabs", h.getTabList())
+		return nil
+
+	case "getUrl":
+		sendServerMsg(msgCh, "urlChanged", h.getPageInfo(ctx))
+		return nil
 
 	default:
 		return fmt.Errorf("unknown input event type: %s", evt.Type)
+	}
+}
+
+// getPageInfo returns current URL and title for the tab context.
+func (h *Handlers) getPageInfo(ctx context.Context) map[string]string {
+	info := map[string]string{"url": "", "title": ""}
+	_ = chromedp.Run(ctx, chromedp.ActionFunc(func(c context.Context) error {
+		idx, entries, err := page.GetNavigationHistory().Do(c)
+		if err != nil {
+			return nil
+		}
+		if int(idx) < len(entries) {
+			info["url"] = entries[idx].URL
+			info["title"] = entries[idx].Title
+		}
+		return nil
+	}))
+	return info
+}
+
+// getTabList returns the current list of tabs.
+func (h *Handlers) getTabList() []map[string]string {
+	targets, err := h.Bridge.ListTargets()
+	if err != nil {
+		return []map[string]string{}
+	}
+	tabs := make([]map[string]string, 0, len(targets))
+	for _, t := range targets {
+		tabs = append(tabs, map[string]string{
+			"id":    string(t.TargetID),
+			"url":   t.URL,
+			"title": t.Title,
+		})
+	}
+	return tabs
+}
+
+func sendServerMsg(ch chan<- []byte, msgType string, data any) {
+	msg := serverMessage{Type: msgType, Data: data}
+	b, err := json.Marshal(msg)
+	if err != nil {
+		return
+	}
+	select {
+	case ch <- b:
+	default:
 	}
 }
 
