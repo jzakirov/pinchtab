@@ -91,12 +91,19 @@ func AuthMiddleware(cfg *config.RuntimeConfig, next http.Handler) http.Handler {
 // isPublicPath returns true for paths that serve static UI pages without auth.
 // The viewer page is public — auth happens when the page connects to the
 // screencast WebSocket using the API token passed as a query parameter.
+// Presigned /live/* paths are public — the presigned token in the path IS the auth.
 func isPublicPath(path string) bool {
 	switch path {
 	case "/", "/login", "/dashboard", "/dashboard/", "/viewer":
 		return true
 	}
-	return strings.HasPrefix(path, "/dashboard/") || path == "/dashboard/favicon.png"
+	if strings.HasPrefix(path, "/dashboard/") || path == "/dashboard/favicon.png" {
+		return true
+	}
+	if strings.HasPrefix(path, "/live/") {
+		return true
+	}
+	return false
 }
 
 func CorsMiddleware(next http.Handler) http.Handler {

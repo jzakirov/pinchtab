@@ -162,6 +162,11 @@
   var maxWidth = parseInt(params.get("maxWidth") || "1280", 10);
   var fps = parseInt(params.get("fps") || "15", 10);
 
+  // Detect if loaded via presigned URL: /live/{token}
+  // If so, the screencast endpoint is /live/{token}/screencast (no API token needed)
+  var liveMatch = location.pathname.match(/^\/live\/(.+?)$/);
+  var liveToken = liveMatch ? liveMatch[1] : "";
+
   var canvas = document.getElementById("viewer-canvas");
   var drawCtx = canvas.getContext("2d");
   var statusDot = document.getElementById("status-dot");
@@ -184,6 +189,13 @@
     p.set("quality", String(quality));
     p.set("maxWidth", String(maxWidth));
     p.set("fps", String(fps));
+
+    // Presigned URL: /live/{token}/screencast (no auth token needed in query)
+    if (liveToken) {
+      return proto + "//" + location.host + "/live/" + liveToken + "/screencast?" + p.toString();
+    }
+
+    // Direct access: /screencast?token=...
     if (apiToken) p.set("token", apiToken);
     return proto + "//" + location.host + "/screencast?" + p.toString();
   }

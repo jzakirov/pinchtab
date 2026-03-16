@@ -1,0 +1,78 @@
+package orchestrator
+
+import (
+	"testing"
+	"time"
+
+	"github.com/pinchtab/pinchtab/internal/config"
+)
+
+func newTestOrchestrator() *Orchestrator {
+	return &Orchestrator{
+		runtimeCfg: &config.RuntimeConfig{
+			Token: "test-secret-token",
+		},
+	}
+}
+
+func TestPresignedURL_SignAndVerify(t *testing.T) {
+	o := newTestOrchestrator()
+
+	token := o.signPayload("instance-123", time.Now().Add(time.Hour))
+	payload, err := o.verifyPayload(token)
+	if err != nil {
+		t.Fatalf("verify failed: %v", err)
+	}
+	if payload.InstanceID != "instance-123" {
+		t.Fatalf("expected instance-123, got %s", payload.InstanceID)
+	}
+}
+
+func TestPresignedURL_Expired(t *testing.T) {
+	o := newTestOrchestrator()
+
+	token := o.signPayload("instance-123", time.Now().Add(-time.Second))
+	_, err := o.verifyPayload(token)
+	if err == nil {
+		t.Fatal("expected error for expired token")
+	}
+}
+
+func TestPresignedURL_Tampered(t *testing.T) {
+	o := newTestOrchestrator()
+
+	token := o.signPayload("instance-123", time.Now().Add(time.Hour))
+
+	// Tamper with instance ID
+	tampered := "instance-456" + token[len("instance-123"):]
+	_, err := o.verifyPayload(tampered)
+	if err == nil {
+		t.Fatal("expected error for tampered token")
+	}
+}
+
+func TestPresignedURL_DifferentSecret(t *testing.T) {
+	o1 := newTestOrchestrator()
+	o2 := &Orchestrator{
+		runtimeCfg: &config.RuntimeConfig{
+			Token: "different-secret",
+		},
+	}
+
+	token := o1.signPayload("instance-123", time.Now().Add(time.Hour))
+	_, err := o2.verifyPayload(token)
+	if err == nil {
+		t.Fatal("expected error for different secret")
+	}
+}
+
+func TestPresignedURL_InvalidFormat(t *testing.T) {
+	o := newTestOrchestrator()
+
+	for _, bad := range []string{"", "abc", "a:b", "a:b:c:d"} {
+		_, err := o.verifyPayload(bad)
+		if err == nil {
+			t.Fatalf("expected error for %q", bad)
+		}
+	}
+}
