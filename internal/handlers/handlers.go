@@ -26,7 +26,6 @@ type Handlers struct {
 	IntentCache  *semantic.IntentCache
 	Recovery     *semantic.RecoveryEngine
 	Router       *engine.Router // optional; nil ⇒ chrome-only
-	ShareTokens  *ShareTokenStore
 }
 
 func New(b bridge.BridgeAPI, cfg *config.RuntimeConfig, p bridge.ProfileService, d *dashboard.Dashboard, o bridge.OrchestratorService) *Handlers {
@@ -42,13 +41,6 @@ func New(b bridge.BridgeAPI, cfg *config.RuntimeConfig, p bridge.ProfileService,
 		IdMgr:        idutil.NewManager(),
 		Matcher:      matcher,
 		IntentCache:  intentCache,
-		ShareTokens:  NewShareTokenStore(),
-	}
-
-	// Wire up share token validation for the auth middleware
-	shareTokenValidator = func(token string) bool {
-		_, ok := h.ShareTokens.Validate(token)
-		return ok
 	}
 
 	// Wire up the recovery engine with callbacks that delegate back to
@@ -152,9 +144,6 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 	mux.HandleFunc("POST /find", h.HandleFind)
 	mux.HandleFunc("GET /screencast", h.HandleScreencast)
 	mux.HandleFunc("GET /screencast/tabs", h.HandleScreencastAll)
-	mux.HandleFunc("POST /share", h.HandleShare)
-	mux.HandleFunc("DELETE /share", h.HandleShareRevoke)
-	mux.HandleFunc("GET /share/validate", h.HandleShareValidate)
 	mux.HandleFunc("GET /viewer", h.HandleViewer)
 	mux.HandleFunc("POST /tabs/{id}/evaluate", h.HandleTabEvaluate)
 	mux.HandleFunc("POST /evaluate", h.HandleEvaluate)

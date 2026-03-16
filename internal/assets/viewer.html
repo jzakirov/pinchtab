@@ -156,7 +156,7 @@
 <script>
 (function() {
   var params = new URLSearchParams(location.search);
-  var shareToken = params.get("token") || "";
+  var apiToken = params.get("apiToken") || params.get("token") || "";
   var currentTabId = params.get("tabId") || "";
   var quality = parseInt(params.get("quality") || "60", 10);
   var maxWidth = parseInt(params.get("maxWidth") || "1280", 10);
@@ -177,13 +177,6 @@
   var tabs = [];
   var tabPollTimer = null;
 
-  function authParam() {
-    var apiToken = params.get("apiToken") || "";
-    if (apiToken) return "token=" + encodeURIComponent(apiToken);
-    if (shareToken) return "token=" + encodeURIComponent(shareToken);
-    return "";
-  }
-
   function buildWsUrl(tabId) {
     var proto = location.protocol === "https:" ? "wss:" : "ws:";
     var p = new URLSearchParams();
@@ -191,8 +184,7 @@
     p.set("quality", String(quality));
     p.set("maxWidth", String(maxWidth));
     p.set("fps", String(fps));
-    var a = authParam();
-    if (a) p.set("token", a.split("=")[1]);
+    if (apiToken) p.set("token", apiToken);
     return proto + "//" + location.host + "/screencast?" + p.toString();
   }
 
@@ -420,21 +412,7 @@
   canvas.addEventListener("click", function() { canvas.focus(); });
 
   // --- Init ---
-  if (shareToken) {
-    fetch("/share/validate?token=" + encodeURIComponent(shareToken))
-      .then(function(r) {
-        if (!r.ok) {
-          errorMsg.textContent = "Invalid or expired share link.";
-          errorMsg.style.display = "block";
-          document.getElementById("container").style.display = "none";
-          return;
-        }
-        connect();
-      })
-      .catch(function() { connect(); });
-  } else {
-    connect();
-  }
+  connect();
 })();
 </script>
 </body>

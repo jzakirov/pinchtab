@@ -23,7 +23,6 @@ func DefaultFileConfig() FileConfig {
 	allowMacro := false
 	allowScreencast := false
 	allowRemoteInput := false
-	allowShareUrls := false
 	allowDownload := false
 	allowUpload := false
 	maxRedirects := -1
@@ -52,7 +51,6 @@ func DefaultFileConfig() FileConfig {
 			AllowMacro:       &allowMacro,
 			AllowScreencast:  &allowScreencast,
 			AllowRemoteInput: &allowRemoteInput,
-			AllowShareUrls:   &allowShareUrls,
 			AllowDownload:    &allowDownload,
 			AllowUpload:      &allowUpload,
 			MaxRedirects:     &maxRedirects,
@@ -156,7 +154,6 @@ type securityConfigJSON struct {
 	AllowMacro       *bool          `json:"allowMacro"`
 	AllowScreencast  *bool          `json:"allowScreencast"`
 	AllowRemoteInput *bool          `json:"allowRemoteInput"`
-	AllowShareUrls   *bool          `json:"allowShareUrls"`
 	AllowDownload    *bool          `json:"allowDownload"`
 	AllowUpload      *bool          `json:"allowUpload"`
 	MaxRedirects     *int           `json:"maxRedirects"`
@@ -269,7 +266,6 @@ func (fc FileConfig) MarshalJSON() ([]byte, error) {
 			AllowMacro:       fc.Security.AllowMacro,
 			AllowScreencast:  fc.Security.AllowScreencast,
 			AllowRemoteInput: fc.Security.AllowRemoteInput,
-			AllowShareUrls:   fc.Security.AllowShareUrls,
 			AllowDownload:    fc.Security.AllowDownload,
 			AllowUpload:      fc.Security.AllowUpload,
 			MaxRedirects:     fc.Security.MaxRedirects,
@@ -348,7 +344,6 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 	allowMacro := cfg.AllowMacro
 	allowScreencast := cfg.AllowScreencast
 	allowRemoteInput := cfg.AllowRemoteInput
-	allowShareUrls := cfg.AllowShareUrls
 	allowDownload := cfg.AllowDownload
 	allowUpload := cfg.AllowUpload
 	maxRedirects := cfg.MaxRedirects
@@ -408,7 +403,6 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 			AllowMacro:       &allowMacro,
 			AllowScreencast:  &allowScreencast,
 			AllowRemoteInput: &allowRemoteInput,
-			AllowShareUrls:   &allowShareUrls,
 			AllowDownload:    &allowDownload,
 			AllowUpload:      &allowUpload,
 			MaxRedirects:     &maxRedirects,

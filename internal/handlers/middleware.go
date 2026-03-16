@@ -53,23 +53,11 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// shareTokenValidator is set during handler initialization to allow the auth
-// middleware to validate share tokens without a circular dependency.
-var shareTokenValidator func(token string) bool
-
 func AuthMiddleware(cfg *config.RuntimeConfig, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if isPublicDashboardPath(r.URL.Path) {
+		if isPublicPath(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
-		}
-		// Allow share-token-authenticated access to viewer and screencast endpoints
-		if isShareTokenPath(r.URL.Path) {
-			qToken := r.URL.Query().Get("token")
-			if qToken != "" && shareTokenValidator != nil && shareTokenValidator(qToken) {
-				next.ServeHTTP(w, r)
-				return
-			}
 		}
 		if cfg.Token != "" {
 			auth := r.Header.Get("Authorization")
@@ -100,18 +88,12 @@ func AuthMiddleware(cfg *config.RuntimeConfig, next http.Handler) http.Handler {
 	})
 }
 
-// isShareTokenPath returns true for paths that can be accessed with a share token.
-func isShareTokenPath(path string) bool {
+// isPublicPath returns true for paths that serve static UI pages without auth.
+// The viewer page is public — auth happens when the page connects to the
+// screencast WebSocket using the API token passed as a query parameter.
+func isPublicPath(path string) bool {
 	switch path {
-	case "/viewer", "/screencast", "/share/validate":
-		return true
-	}
-	return false
-}
-
-func isPublicDashboardPath(path string) bool {
-	switch path {
-	case "/", "/login", "/dashboard", "/dashboard/":
+	case "/", "/login", "/dashboard", "/dashboard/", "/viewer":
 		return true
 	}
 	return strings.HasPrefix(path, "/dashboard/") || path == "/dashboard/favicon.png"

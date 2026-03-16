@@ -201,9 +201,6 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	if fc.Security.AllowRemoteInput != nil {
 		cfg.AllowRemoteInput = *fc.Security.AllowRemoteInput
 	}
-	if fc.Security.AllowShareUrls != nil {
-		cfg.AllowShareUrls = *fc.Security.AllowShareUrls
-	}
 	if fc.Security.AllowDownload != nil {
 		cfg.AllowDownload = *fc.Security.AllowDownload
 	}

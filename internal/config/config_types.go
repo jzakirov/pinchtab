@@ -18,7 +18,6 @@ type RuntimeConfig struct {
 	AllowMacro       bool
 	AllowScreencast  bool
 	AllowRemoteInput bool // Allow sending mouse/keyboard input via screencast WebSocket
-	AllowShareUrls   bool // Allow generating shareable viewer URLs
 	AllowDownload    bool
 	AllowUpload      bool
 	MaxRedirects     int // Max HTTP redirects (-1=unlimited, 0=none, default=-1)
@@ -172,7 +171,6 @@ type SecurityConfig struct {
 	AllowMacro       *bool        `json:"allowMacro,omitempty"`
 	AllowScreencast  *bool        `json:"allowScreencast,omitempty"`
 	AllowRemoteInput *bool        `json:"allowRemoteInput,omitempty"`
-	AllowShareUrls   *bool        `json:"allowShareUrls,omitempty"`
 	AllowDownload    *bool        `json:"allowDownload,omitempty"`
 	AllowUpload      *bool        `json:"allowUpload,omitempty"`
 	MaxRedirects     *int         `json:"maxRedirects,omitempty"`
