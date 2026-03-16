@@ -329,6 +329,19 @@ var activityCmd = &cobra.Command{
 	},
 }
 
+var shareCmd = &cobra.Command{
+	Use:   "share <instance-id>",
+	Short: "Generate a shareable live browser URL",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		ttl, _ := cmd.Flags().GetInt("ttl")
+		cfg := config.Load()
+		runCLIWith(cfg, func(client *http.Client, base, token string) {
+			browseractions.Share(client, base, token, args[0], ttl)
+		})
+	},
+}
+
 var instanceCmd = &cobra.Command{
 	Use:   "instance",
 	Short: "Manage browser instances",
@@ -532,6 +545,7 @@ func init() {
 	textCmd.GroupID = "browser"
 	profilesCmd.GroupID = "management"
 	activityCmd.GroupID = "management"
+	shareCmd.GroupID = "management"
 	downloadCmd.GroupID = "browser"
 	uploadCmd.GroupID = "browser"
 	findCmd.GroupID = "browser"
@@ -680,6 +694,8 @@ func init() {
 	rootCmd.AddCommand(textCmd)
 	rootCmd.AddCommand(profilesCmd)
 	rootCmd.AddCommand(activityCmd)
+	shareCmd.Flags().Int("ttl", 3600, "Link validity in seconds (default: 1 hour)")
+	rootCmd.AddCommand(shareCmd)
 	rootCmd.AddCommand(downloadCmd)
 	rootCmd.AddCommand(uploadCmd)
 	rootCmd.AddCommand(findCmd)
@@ -720,7 +736,6 @@ func init() {
 	dialogCmd.AddCommand(dialogAcceptCmd)
 	dialogCmd.AddCommand(dialogDismissCmd)
 	rootCmd.AddCommand(dialogCmd)
-
 	instanceCmd.GroupID = "management"
 
 	startInstanceCmd := &cobra.Command{
