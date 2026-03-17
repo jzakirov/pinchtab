@@ -144,7 +144,6 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 	mux.HandleFunc("POST /find", h.HandleFind)
 	mux.HandleFunc("GET /screencast", h.HandleScreencast)
 	mux.HandleFunc("GET /screencast/tabs", h.HandleScreencastAll)
-	mux.HandleFunc("GET /viewer", h.HandleViewer)
 	mux.HandleFunc("POST /tabs/{id}/evaluate", h.HandleTabEvaluate)
 	mux.HandleFunc("POST /evaluate", h.HandleEvaluate)
 	mux.HandleFunc("GET /network", h.HandleNetwork)

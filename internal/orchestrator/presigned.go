@@ -4,20 +4,19 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
-	"encoding/json"
-
 	"github.com/pinchtab/pinchtab/internal/dashboard"
 	"github.com/pinchtab/pinchtab/internal/handlers"
 	"github.com/pinchtab/pinchtab/internal/web"
 )
 
-// presignedPayload is the data encoded into a presigned viewer URL.
+// presignedPayload is the data encoded into a presigned live share URL.
 type presignedPayload struct {
 	InstanceID string
 	ExpiresAt  time.Time
@@ -25,17 +24,25 @@ type presignedPayload struct {
 
 // signPayload creates an HMAC-SHA256 signature for a presigned URL.
 // Format: {instanceId}:{expiresUnix}:{signature}
-func (o *Orchestrator) signPayload(instanceID string, expiresAt time.Time) string {
+func (o *Orchestrator) signPayload(instanceID string, expiresAt time.Time) (string, error) {
+	secret, err := o.presignSecret()
+	if err != nil {
+		return "", err
+	}
 	expStr := strconv.FormatInt(expiresAt.Unix(), 10)
 	msg := instanceID + ":" + expStr
-	mac := hmac.New(sha256.New, []byte(o.presignSecret()))
+	mac := hmac.New(sha256.New, []byte(secret))
 	mac.Write([]byte(msg))
 	sig := hex.EncodeToString(mac.Sum(nil))
-	return instanceID + ":" + expStr + ":" + sig
+	return instanceID + ":" + expStr + ":" + sig, nil
 }
 
 // verifyPayload verifies and extracts data from a presigned token.
 func (o *Orchestrator) verifyPayload(token string) (*presignedPayload, error) {
+	secret, err := o.presignSecret()
+	if err != nil {
+		return nil, err
+	}
 	parts := strings.SplitN(token, ":", 3)
 	if len(parts) != 3 {
 		return nil, fmt.Errorf("invalid token format")
@@ -44,7 +51,7 @@ func (o *Orchestrator) verifyPayload(token string) (*presignedPayload, error) {
 
 	// Verify signature
 	msg := instanceID + ":" + expStr
-	mac := hmac.New(sha256.New, []byte(o.presignSecret()))
+	mac := hmac.New(sha256.New, []byte(secret))
 	mac.Write([]byte(msg))
 	expected := hex.EncodeToString(mac.Sum(nil))
 	if !hmac.Equal([]byte(sig), []byte(expected)) {
@@ -70,14 +77,14 @@ func (o *Orchestrator) verifyPayload(token string) (*presignedPayload, error) {
 // presignSecret returns the HMAC key for signing presigned URLs.
 // Uses the orchestrator's configured token — if no token is set,
 // presigned URLs cannot be generated.
-func (o *Orchestrator) presignSecret() string {
+func (o *Orchestrator) presignSecret() (string, error) {
 	if o.runtimeCfg != nil && o.runtimeCfg.Token != "" {
-		return "pinchtab-presign:" + o.runtimeCfg.Token
+		return "pinchtab-presign:" + o.runtimeCfg.Token, nil
 	}
-	return "pinchtab-presign:default"
+	return "", fmt.Errorf("presigned links require a configured API token")
 }
 
-// handleCreateShareLink generates a presigned viewer URL for an instance.
+// handleCreateShareLink generates a presigned live share URL for an instance.
 //
 // POST /instances/{id}/share
 // Body: { "ttlSeconds": 3600 }  (optional, default 1h, max 24h)
@@ -115,27 +122,17 @@ func (o *Orchestrator) handleCreateShareLink(w http.ResponseWriter, r *http.Requ
 	}
 
 	expiresAt := time.Now().Add(ttl)
-	token := o.signPayload(id, expiresAt)
+	token, err := o.signPayload(id, expiresAt)
+	if err != nil {
+		web.Error(w, 503, err)
+		return
+	}
 
 	web.JSON(w, 200, map[string]any{
 		"url":        "/live/" + token,
 		"expiresAt":  expiresAt.Format(time.RFC3339),
 		"instanceId": id,
 	})
-}
-
-// handleInstanceViewer serves the viewer page for an authenticated request.
-// Requires normal API auth. The viewer HTML connects to the screencast WebSocket.
-//
-// GET /instances/{id}/viewer
-func (o *Orchestrator) handleInstanceViewer(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-cache")
-	if html := dashboard.SPAHTML(); html != nil {
-		_, _ = w.Write(html)
-	} else {
-		http.Error(w, "Dashboard not built", 503)
-	}
 }
 
 // handleLiveViewer serves the React SPA for a presigned URL.

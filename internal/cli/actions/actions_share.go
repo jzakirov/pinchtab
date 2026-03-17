@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-// Share generates a presigned viewer URL for the given instance.
+// Share generates a presigned live share URL for the given instance.
 func Share(client *http.Client, base, token, instanceID string, ttlSeconds int) {
 	orchestratorURL := os.Getenv("PINCHTAB_ORCHESTRATOR_URL")
 	if orchestratorURL == "" {

@@ -18,7 +18,10 @@ func newTestOrchestrator() *Orchestrator {
 func TestPresignedURL_SignAndVerify(t *testing.T) {
 	o := newTestOrchestrator()
 
-	token := o.signPayload("instance-123", time.Now().Add(time.Hour))
+	token, err := o.signPayload("instance-123", time.Now().Add(time.Hour))
+	if err != nil {
+		t.Fatalf("sign failed: %v", err)
+	}
 	payload, err := o.verifyPayload(token)
 	if err != nil {
 		t.Fatalf("verify failed: %v", err)
@@ -31,8 +34,11 @@ func TestPresignedURL_SignAndVerify(t *testing.T) {
 func TestPresignedURL_Expired(t *testing.T) {
 	o := newTestOrchestrator()
 
-	token := o.signPayload("instance-123", time.Now().Add(-time.Second))
-	_, err := o.verifyPayload(token)
+	token, err := o.signPayload("instance-123", time.Now().Add(-time.Second))
+	if err != nil {
+		t.Fatalf("sign failed: %v", err)
+	}
+	_, err = o.verifyPayload(token)
 	if err == nil {
 		t.Fatal("expected error for expired token")
 	}
@@ -41,11 +47,14 @@ func TestPresignedURL_Expired(t *testing.T) {
 func TestPresignedURL_Tampered(t *testing.T) {
 	o := newTestOrchestrator()
 
-	token := o.signPayload("instance-123", time.Now().Add(time.Hour))
+	token, err := o.signPayload("instance-123", time.Now().Add(time.Hour))
+	if err != nil {
+		t.Fatalf("sign failed: %v", err)
+	}
 
 	// Tamper with instance ID
 	tampered := "instance-456" + token[len("instance-123"):]
-	_, err := o.verifyPayload(tampered)
+	_, err = o.verifyPayload(tampered)
 	if err == nil {
 		t.Fatal("expected error for tampered token")
 	}
@@ -59,8 +68,11 @@ func TestPresignedURL_DifferentSecret(t *testing.T) {
 		},
 	}
 
-	token := o1.signPayload("instance-123", time.Now().Add(time.Hour))
-	_, err := o2.verifyPayload(token)
+	token, err := o1.signPayload("instance-123", time.Now().Add(time.Hour))
+	if err != nil {
+		t.Fatalf("sign failed: %v", err)
+	}
+	_, err = o2.verifyPayload(token)
 	if err == nil {
 		t.Fatal("expected error for different secret")
 	}
@@ -74,5 +86,16 @@ func TestPresignedURL_InvalidFormat(t *testing.T) {
 		if err == nil {
 			t.Fatalf("expected error for %q", bad)
 		}
+	}
+}
+
+func TestPresignedURL_RequiresConfiguredToken(t *testing.T) {
+	o := &Orchestrator{runtimeCfg: &config.RuntimeConfig{}}
+
+	if _, err := o.signPayload("instance-123", time.Now().Add(time.Hour)); err == nil {
+		t.Fatal("expected signing to fail without configured token")
+	}
+	if _, err := o.verifyPayload("instance-123:1:deadbeef"); err == nil {
+		t.Fatal("expected verification to fail without configured token")
 	}
 }

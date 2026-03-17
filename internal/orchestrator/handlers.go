@@ -38,7 +38,6 @@ func (o *Orchestrator) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("POST /instances/{id}/tab", o.proxyToInstance)
 	registerCapabilityRoute(mux, "GET /instances/{id}/proxy/screencast", o.AllowsScreencast(), "screencast", "security.allowScreencast", "screencast_disabled", o.handleProxyScreencast)
 	registerCapabilityRoute(mux, "GET /instances/{id}/screencast", o.AllowsScreencast(), "screencast", "security.allowScreencast", "screencast_disabled", o.proxyToInstance)
-	registerCapabilityRoute(mux, "GET /instances/{id}/viewer", o.AllowsScreencast(), "viewer", "security.allowScreencast", "screencast_disabled", o.handleInstanceViewer)
 	registerCapabilityRoute(mux, "POST /instances/{id}/share", o.AllowsScreencast(), "share", "security.allowScreencast", "screencast_disabled", o.handleCreateShareLink)
 
 	// Presigned live viewer (public — no API auth, token in path)
