@@ -842,7 +842,7 @@ func runBrowserCLIWith(cfg *config.RuntimeConfig, fn func(client *http.Client, b
 }
 
 func profileSelectorFromEnv() string {
-	return strings.TrimSpace(os.Getenv("PINCHTAB_PROFILE_ID"))
+	return strings.TrimSpace(os.Getenv("PINCHTAB_PROFILE"))
 }
 
 func resolvedInstanceBind(base, fallback string) string {

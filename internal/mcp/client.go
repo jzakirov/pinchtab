@@ -38,7 +38,7 @@ func NewClient(baseURL, token string) *Client {
 }
 
 func profileSelectorFromEnv() string {
-	return strings.TrimSpace(os.Getenv("PINCHTAB_PROFILE_ID"))
+	return strings.TrimSpace(os.Getenv("PINCHTAB_PROFILE"))
 }
 
 func (c *Client) url(path string) string {

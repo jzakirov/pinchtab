@@ -23,16 +23,15 @@ func TestNewClient(t *testing.T) {
 	}
 }
 
-func TestNewClientReadsProfileIDFromEnv(t *testing.T) {
-	t.Setenv("PINCHTAB_PROFILE_ID", "prof_123")
+func TestNewClientReadsProfileFromEnv(t *testing.T) {
+	t.Setenv("PINCHTAB_PROFILE", "my-profile")
 	c := NewClient("http://localhost:9867", "tok123")
-	if c.Profile != "prof_123" {
-		t.Fatalf("Profile = %q, want %q", c.Profile, "prof_123")
+	if c.Profile != "my-profile" {
+		t.Fatalf("Profile = %q, want %q", c.Profile, "my-profile")
 	}
 }
 
-func TestNewClientIgnoresLegacyProfileEnv(t *testing.T) {
-	t.Setenv("PINCHTAB_PROFILE", "name-profile")
+func TestNewClientLeavesProfileEmptyWhenEnvMissing(t *testing.T) {
 	c := NewClient("http://localhost:9867", "tok123")
 	if c.Profile != "" {
 		t.Fatalf("Profile = %q, want empty", c.Profile)
@@ -175,7 +174,7 @@ func TestClientDashboardProfilesURL(t *testing.T) {
 }
 
 func TestClientBrowserGetResolvesProfileInstance(t *testing.T) {
-	t.Setenv("PINCHTAB_PROFILE_ID", "tg-555")
+	t.Setenv("PINCHTAB_PROFILE", "tg-555")
 
 	var browserAuth string
 	instance := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
