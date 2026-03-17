@@ -3,10 +3,12 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
 
+	cli "github.com/pinchtab/pinchtab/internal/cli"
 	browseractions "github.com/pinchtab/pinchtab/internal/cli/actions"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/urlutil"
@@ -20,7 +22,7 @@ var quickCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		args[0] = urlutil.Normalize(args[0])
 		cfg := config.Load()
-		runCLIWith(cfg, func(client *http.Client, base, token string) {
+		runBrowserCLIWith(cfg, func(client *http.Client, base, token string) {
 			browseractions.Quick(client, base, token, args)
 		})
 	},
@@ -34,7 +36,7 @@ var navCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		url := urlutil.Normalize(args[0])
 		cfg := config.Load()
-		runCLIWith(cfg, func(client *http.Client, base, token string) {
+		runBrowserCLIWith(cfg, func(client *http.Client, base, token string) {
 			browseractions.Navigate(client, base, token, url, cmd)
 		})
 	},
@@ -45,7 +47,7 @@ var backCmd = &cobra.Command{
 	Short: "Go back in browser history",
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
-		runCLIWith(cfg, func(client *http.Client, base, token string) {
+		runBrowserCLIWith(cfg, func(client *http.Client, base, token string) {
 			browseractions.Back(client, base, token, cmd)
 		})
 	},
@@ -56,7 +58,7 @@ var forwardCmd = &cobra.Command{
 	Short: "Go forward in browser history",
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
-		runCLIWith(cfg, func(client *http.Client, base, token string) {
+		runBrowserCLIWith(cfg, func(client *http.Client, base, token string) {
 			browseractions.Forward(client, base, token, cmd)
 		})
 	},
@@ -67,7 +69,7 @@ var reloadCmd = &cobra.Command{
 	Short: "Reload current page",
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
-		runCLIWith(cfg, func(client *http.Client, base, token string) {
+		runBrowserCLIWith(cfg, func(client *http.Client, base, token string) {
 			browseractions.Reload(client, base, token, cmd)
 		})
 	},
@@ -78,7 +80,7 @@ var snapCmd = &cobra.Command{
 	Short: "Snapshot accessibility tree",
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
-		runCLIWith(cfg, func(client *http.Client, base, token string) {
+		runBrowserCLIWith(cfg, func(client *http.Client, base, token string) {
 			browseractions.Snapshot(client, base, token, cmd)
 		})
 	},
@@ -94,7 +96,7 @@ var clickCmd = &cobra.Command{
 			ref = args[0]
 		}
 		cfg := config.Load()
-		runCLIWith(cfg, func(client *http.Client, base, token string) {
+		runBrowserCLIWith(cfg, func(client *http.Client, base, token string) {
 			browseractions.Action(client, base, token, "click", ref, cmd)
 		})
 	},
@@ -110,7 +112,7 @@ var dblclickCmd = &cobra.Command{
 			ref = args[0]
 		}
 		cfg := config.Load()
-		runCLIWith(cfg, func(client *http.Client, base, token string) {
+		runBrowserCLIWith(cfg, func(client *http.Client, base, token string) {
 			browseractions.Action(client, base, token, "dblclick", ref, cmd)
 		})
 	},
@@ -122,7 +124,7 @@ var typeCmd = &cobra.Command{
 	Args:  cobra.MinimumNArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
-		runCLIWith(cfg, func(client *http.Client, base, token string) {
+		runBrowserCLIWith(cfg, func(client *http.Client, base, token string) {
 			browseractions.ActionSimple(client, base, token, "type", args, cmd)
 		})
 	},
@@ -133,7 +135,7 @@ var screenshotCmd = &cobra.Command{
 	Short: "Take a screenshot",
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
-		runCLIWith(cfg, func(client *http.Client, base, token string) {
+		runBrowserCLIWith(cfg, func(client *http.Client, base, token string) {
 			browseractions.Screenshot(client, base, token, cmd)
 		})
 	},
@@ -146,7 +148,7 @@ var tabsCmd = &cobra.Command{
 	Args:    cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
-		runCLIWith(cfg, func(client *http.Client, base, token string) {
+		runBrowserCLIWith(cfg, func(client *http.Client, base, token string) {
 			if len(args) == 0 {
 				browseractions.TabList(client, base, token)
 			} else {
@@ -184,7 +186,7 @@ var pressCmd = &cobra.Command{
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
-		runCLIWith(cfg, func(client *http.Client, base, token string) {
+		runBrowserCLIWith(cfg, func(client *http.Client, base, token string) {
 			browseractions.ActionSimple(client, base, token, "press", args, cmd)
 		})
 	},
@@ -196,7 +198,7 @@ var fillCmd = &cobra.Command{
 	Args:  cobra.MinimumNArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
-		runCLIWith(cfg, func(client *http.Client, base, token string) {
+		runBrowserCLIWith(cfg, func(client *http.Client, base, token string) {
 			browseractions.ActionSimple(client, base, token, "fill", args, cmd)
 		})
 	},
@@ -212,7 +214,7 @@ var hoverCmd = &cobra.Command{
 			ref = args[0]
 		}
 		cfg := config.Load()
-		runCLIWith(cfg, func(client *http.Client, base, token string) {
+		runBrowserCLIWith(cfg, func(client *http.Client, base, token string) {
 			browseractions.Action(client, base, token, "hover", ref, cmd)
 		})
 	},
@@ -228,7 +230,7 @@ var focusCmd = &cobra.Command{
 			ref = args[0]
 		}
 		cfg := config.Load()
-		runCLIWith(cfg, func(client *http.Client, base, token string) {
+		runBrowserCLIWith(cfg, func(client *http.Client, base, token string) {
 			browseractions.Action(client, base, token, "focus", ref, cmd)
 		})
 	},
@@ -240,7 +242,7 @@ var scrollCmd = &cobra.Command{
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
-		runCLIWith(cfg, func(client *http.Client, base, token string) {
+		runBrowserCLIWith(cfg, func(client *http.Client, base, token string) {
 			browseractions.ActionSimple(client, base, token, "scroll", args, cmd)
 		})
 	},
@@ -252,7 +254,7 @@ var evalCmd = &cobra.Command{
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
-		runCLIWith(cfg, func(client *http.Client, base, token string) {
+		runBrowserCLIWith(cfg, func(client *http.Client, base, token string) {
 			browseractions.Evaluate(client, base, token, args, cmd)
 		})
 	},
@@ -263,7 +265,7 @@ var pdfCmd = &cobra.Command{
 	Short: "Export the current page as PDF",
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
-		runCLIWith(cfg, func(client *http.Client, base, token string) {
+		runBrowserCLIWith(cfg, func(client *http.Client, base, token string) {
 			browseractions.PDF(client, base, token, cmd)
 		})
 	},
@@ -274,7 +276,7 @@ var textCmd = &cobra.Command{
 	Short: "Extract page text",
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
-		runCLIWith(cfg, func(client *http.Client, base, token string) {
+		runBrowserCLIWith(cfg, func(client *http.Client, base, token string) {
 			browseractions.Text(client, base, token, cmd)
 		})
 	},
@@ -288,7 +290,7 @@ var downloadCmd = &cobra.Command{
 		args[0] = urlutil.Normalize(args[0])
 		output, _ := cmd.Flags().GetString("output")
 		cfg := config.Load()
-		runCLIWith(cfg, func(client *http.Client, base, token string) {
+		runBrowserCLIWith(cfg, func(client *http.Client, base, token string) {
 			browseractions.Download(client, base, token, args, output)
 		})
 	},
@@ -301,7 +303,7 @@ var uploadCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		selector, _ := cmd.Flags().GetString("selector")
 		cfg := config.Load()
-		runCLIWith(cfg, func(client *http.Client, base, token string) {
+		runBrowserCLIWith(cfg, func(client *http.Client, base, token string) {
 			browseractions.Upload(client, base, token, args, selector)
 		})
 	},
@@ -353,7 +355,7 @@ var findCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
-		runCLIWith(cfg, func(client *http.Client, base, token string) {
+		runBrowserCLIWith(cfg, func(client *http.Client, base, token string) {
 			browseractions.Find(client, base, token, args[0], cmd)
 		})
 	},
@@ -365,7 +367,7 @@ var waitCmd = &cobra.Command{
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
-		runCLIWith(cfg, func(client *http.Client, base, token string) {
+		runBrowserCLIWith(cfg, func(client *http.Client, base, token string) {
 			browseractions.Wait(client, base, token, args, cmd)
 		})
 	},
@@ -387,7 +389,7 @@ var dialogAcceptCmd = &cobra.Command{
 		}
 		tabID, _ := cmd.Flags().GetString("tab")
 		cfg := config.Load()
-		runCLIWith(cfg, func(client *http.Client, base, token string) {
+		runBrowserCLIWith(cfg, func(client *http.Client, base, token string) {
 			browseractions.Dialog(client, base, token, "accept", text, tabID)
 		})
 	},
@@ -399,7 +401,7 @@ var dialogDismissCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		tabID, _ := cmd.Flags().GetString("tab")
 		cfg := config.Load()
-		runCLIWith(cfg, func(client *http.Client, base, token string) {
+		runBrowserCLIWith(cfg, func(client *http.Client, base, token string) {
 			browseractions.Dialog(client, base, token, "dismiss", "", tabID)
 		})
 	},
@@ -411,7 +413,7 @@ var selectCmd = &cobra.Command{
 	Args:  cobra.MinimumNArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
-		runCLIWith(cfg, func(client *http.Client, base, token string) {
+		runBrowserCLIWith(cfg, func(client *http.Client, base, token string) {
 			browseractions.ActionSimple(client, base, token, "select", args, cmd)
 		})
 	},
@@ -423,7 +425,7 @@ var checkCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
-		runCLIWith(cfg, func(client *http.Client, base, token string) {
+		runBrowserCLIWith(cfg, func(client *http.Client, base, token string) {
 			browseractions.Action(client, base, token, "check", args[0], cmd)
 		})
 	},
@@ -435,7 +437,7 @@ var networkCmd = &cobra.Command{
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
-		runCLIWith(cfg, func(client *http.Client, base, token string) {
+		runBrowserCLIWith(cfg, func(client *http.Client, base, token string) {
 			browseractions.Network(client, base, token, cmd, args)
 		})
 	},
@@ -447,7 +449,7 @@ var uncheckCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
-		runCLIWith(cfg, func(client *http.Client, base, token string) {
+		runBrowserCLIWith(cfg, func(client *http.Client, base, token string) {
 			browseractions.Action(client, base, token, "uncheck", args[0], cmd)
 		})
 	},
@@ -464,7 +466,7 @@ var keyboardTypeCmd = &cobra.Command{
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
-		runCLIWith(cfg, func(client *http.Client, base, token string) {
+		runBrowserCLIWith(cfg, func(client *http.Client, base, token string) {
 			browseractions.ActionSimple(client, base, token, "keyboard-type", args, cmd)
 		})
 	},
@@ -476,7 +478,7 @@ var keyboardInsertTextCmd = &cobra.Command{
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
-		runCLIWith(cfg, func(client *http.Client, base, token string) {
+		runBrowserCLIWith(cfg, func(client *http.Client, base, token string) {
 			browseractions.ActionSimple(client, base, token, "keyboard-inserttext", args, cmd)
 		})
 	},
@@ -488,7 +490,7 @@ var keydownCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
-		runCLIWith(cfg, func(client *http.Client, base, token string) {
+		runBrowserCLIWith(cfg, func(client *http.Client, base, token string) {
 			browseractions.ActionSimple(client, base, token, "keydown", args, cmd)
 		})
 	},
@@ -500,7 +502,7 @@ var keyupCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
-		runCLIWith(cfg, func(client *http.Client, base, token string) {
+		runBrowserCLIWith(cfg, func(client *http.Client, base, token string) {
 			browseractions.ActionSimple(client, base, token, "keyup", args, cmd)
 		})
 	},
@@ -516,7 +518,7 @@ var scrollintoviewCmd = &cobra.Command{
 			ref = args[0]
 		}
 		cfg := config.Load()
-		runCLIWith(cfg, func(client *http.Client, base, token string) {
+		runBrowserCLIWith(cfg, func(client *http.Client, base, token string) {
 			browseractions.Action(client, base, token, "scrollintoview", ref, cmd)
 		})
 	},
@@ -566,7 +568,7 @@ func init() {
 		Args:  cobra.MaximumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			cfg := config.Load()
-			runCLIWith(cfg, func(client *http.Client, base, token string) {
+			runBrowserCLIWith(cfg, func(client *http.Client, base, token string) {
 				body := map[string]any{"action": "new"}
 				if len(args) > 0 {
 					body["url"] = urlutil.Normalize(args[0])
@@ -581,7 +583,7 @@ func init() {
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			cfg := config.Load()
-			runCLIWith(cfg, func(client *http.Client, base, token string) {
+			runBrowserCLIWith(cfg, func(client *http.Client, base, token string) {
 				browseractions.TabClose(client, base, token, args[0])
 			})
 		},
@@ -828,4 +830,31 @@ func runCLIWith(cfg *config.RuntimeConfig, fn func(client *http.Client, base, to
 	}
 
 	fn(client, base, token)
+}
+
+func runBrowserCLIWith(cfg *config.RuntimeConfig, fn func(client *http.Client, base, token string)) {
+	runCLIWith(cfg, func(client *http.Client, base, token string) {
+		if profile := profileSelectorFromEnv(); profile != "" {
+			base = cli.ResolveProfileBase(base, token, profile, resolvedInstanceBind(base, cfg.Bind))
+		}
+		fn(client, base, token)
+	})
+}
+
+func profileSelectorFromEnv() string {
+	if v := strings.TrimSpace(os.Getenv("PINCHTAB_PROFILE_ID")); v != "" {
+		return v
+	}
+	return strings.TrimSpace(os.Getenv("PINCHTAB_PROFILE"))
+}
+
+func resolvedInstanceBind(base, fallback string) string {
+	if base == "" {
+		return fallback
+	}
+	u, err := url.Parse(base)
+	if err == nil && u.Hostname() != "" {
+		return u.Hostname()
+	}
+	return fallback
 }

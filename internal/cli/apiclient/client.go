@@ -129,6 +129,104 @@ func ResolveInstanceBase(orchBase, token, instanceID, bind string) string {
 	return fmt.Sprintf("http://%s:%s", bind, inst.Port)
 }
 
+func ResolveProfileBase(orchBase, token, profile, bind string) string {
+	c := &http.Client{Timeout: 15 * time.Second}
+
+	status, err := getProfileInstanceStatus(c, orchBase, token, profile)
+	if err != nil {
+		fatal("failed to resolve profile %q: %v", profile, err)
+	}
+	if status.Port != "" && (status.Running || status.Status == "starting") {
+		return fmt.Sprintf("http://%s:%s", bind, status.Port)
+	}
+
+	started, err := startProfileInstance(c, orchBase, token, profile)
+	if err != nil {
+		fatal("failed to start profile %q: %v", profile, err)
+	}
+	if started.Port == "" {
+		fatal("profile %q started without a port", profile)
+	}
+	return fmt.Sprintf("http://%s:%s", bind, started.Port)
+}
+
+type profileInstanceStatus struct {
+	Name    string `json:"name"`
+	Running bool   `json:"running"`
+	Status  string `json:"status"`
+	Port    string `json:"port"`
+	ID      string `json:"id"`
+}
+
+type startedProfileInstance struct {
+	ID          string `json:"id"`
+	ProfileName string `json:"profileName"`
+	Port        string `json:"port"`
+	Status      string `json:"status"`
+}
+
+func getProfileInstanceStatus(client *http.Client, orchBase, token, profile string) (*profileInstanceStatus, error) {
+	req, err := http.NewRequest(http.MethodGet, orchBase+"/profiles/"+url.PathEscape(profile)+"/instance", nil)
+	if err != nil {
+		return nil, err
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
+	}
+
+	var status profileInstanceStatus
+	if err := json.Unmarshal(body, &status); err != nil {
+		return nil, fmt.Errorf("parse profile instance status: %w", err)
+	}
+	return &status, nil
+}
+
+func startProfileInstance(client *http.Client, orchBase, token, profile string) (*startedProfileInstance, error) {
+	payload := []byte(`{"headless":true}`)
+	req, err := http.NewRequest(http.MethodPost, orchBase+"/profiles/"+url.PathEscape(profile)+"/start", bytes.NewReader(payload))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
+	}
+
+	var started startedProfileInstance
+	if err := json.Unmarshal(body, &started); err != nil {
+		return nil, fmt.Errorf("parse started profile instance: %w", err)
+	}
+	return &started, nil
+}
+
 func fatal(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, format+"\n", args...)
 	os.Exit(1)

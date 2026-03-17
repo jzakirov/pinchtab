@@ -19,6 +19,10 @@ func ResolveInstanceBase(orchBase, token, instanceID, bind string) string {
 	return apiclient.ResolveInstanceBase(orchBase, token, instanceID, bind)
 }
 
+func ResolveProfileBase(orchBase, token, profile, bind string) string {
+	return apiclient.ResolveProfileBase(orchBase, token, profile, bind)
+}
+
 func CheckServerAndGuide(client *http.Client, base, token string) bool {
 	return apiclient.CheckServerAndGuide(client, base, token)
 }

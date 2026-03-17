@@ -9,16 +9,19 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/activity"
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 )
 
 // Client is an HTTP client for PinchTab's REST API.
 type Client struct {
 	BaseURL    string
 	Token      string
+	Profile    string
 	HTTPClient *http.Client
 }
 
@@ -27,10 +30,18 @@ func NewClient(baseURL, token string) *Client {
 	return &Client{
 		BaseURL: baseURL,
 		Token:   token,
+		Profile: profileSelectorFromEnv(),
 		HTTPClient: &http.Client{
 			Timeout: 120 * time.Second,
 		},
 	}
+}
+
+func profileSelectorFromEnv() string {
+	if v := strings.TrimSpace(os.Getenv("PINCHTAB_PROFILE_ID")); v != "" {
+		return v
+	}
+	return strings.TrimSpace(os.Getenv("PINCHTAB_PROFILE"))
 }
 
 func (c *Client) url(path string) string {
@@ -95,4 +106,50 @@ func (c *Client) Post(ctx context.Context, path string, payload any) ([]byte, in
 		req.Header.Set("Content-Type", "application/json")
 	}
 	return c.do(req)
+}
+
+func (c *Client) BrowserGet(ctx context.Context, path string, query url.Values) ([]byte, int, error) {
+	u := c.browserBase() + path
+	if len(query) > 0 {
+		u += "?" + query.Encode()
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	return c.do(req)
+}
+
+func (c *Client) BrowserPost(ctx context.Context, path string, payload any) ([]byte, int, error) {
+	var body io.Reader
+	if payload != nil {
+		b, err := json.Marshal(payload)
+		if err != nil {
+			return nil, 0, fmt.Errorf("marshal payload: %w", err)
+		}
+		body = bytes.NewReader(b)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.browserBase()+path, body)
+	if err != nil {
+		return nil, 0, err
+	}
+	if payload != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	return c.do(req)
+}
+
+func (c *Client) browserBase() string {
+	if c.Profile == "" {
+		return c.BaseURL
+	}
+	return apiclient.ResolveProfileBase(c.BaseURL, c.Token, c.Profile, c.instanceBind())
+}
+
+func (c *Client) instanceBind() string {
+	u, err := url.Parse(c.BaseURL)
+	if err == nil && u.Hostname() != "" {
+		return u.Hostname()
+	}
+	return "127.0.0.1"
 }

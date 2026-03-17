@@ -23,6 +23,23 @@ func TestNewClient(t *testing.T) {
 	}
 }
 
+func TestNewClientReadsProfileFromEnv(t *testing.T) {
+	t.Setenv("PINCHTAB_PROFILE", "tg-123")
+	c := NewClient("http://localhost:9867", "tok123")
+	if c.Profile != "tg-123" {
+		t.Fatalf("Profile = %q, want %q", c.Profile, "tg-123")
+	}
+}
+
+func TestNewClientPrefersProfileIDFromEnv(t *testing.T) {
+	t.Setenv("PINCHTAB_PROFILE", "name-profile")
+	t.Setenv("PINCHTAB_PROFILE_ID", "prof_123")
+	c := NewClient("http://localhost:9867", "tok123")
+	if c.Profile != "prof_123" {
+		t.Fatalf("Profile = %q, want %q", c.Profile, "prof_123")
+	}
+}
+
 func TestClientGet(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -155,5 +172,57 @@ func TestClientDashboardProfilesURL(t *testing.T) {
 	want := "http://localhost:9867/dashboard/profiles"
 	if got != want {
 		t.Fatalf("dashboardProfilesURL = %q, want %q", got, want)
+	}
+}
+
+func TestClientBrowserGetResolvesProfileInstance(t *testing.T) {
+	t.Setenv("PINCHTAB_PROFILE", "tg-555")
+
+	var browserAuth string
+	instance := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		browserAuth = r.Header.Get("Authorization")
+		if r.URL.Path != "/snapshot" {
+			t.Fatalf("browser path = %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("tabId") != "tab-1" {
+			t.Fatalf("tabId = %q", r.URL.Query().Get("tabId"))
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, `{"ok":true}`)
+	}))
+	defer instance.Close()
+
+	instanceURL, err := url.Parse(instance.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var orchestrationCalls []string
+	orch := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		orchestrationCalls = append(orchestrationCalls, r.Method+" "+r.URL.Path)
+		if r.URL.Path != "/profiles/tg-555/instance" {
+			t.Fatalf("orchestrator path = %s", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, `{"name":"tg-555","running":true,"status":"running","port":"`+instanceURL.Port()+`","id":"inst_555"}`)
+	}))
+	defer orch.Close()
+
+	c := NewClient(orch.URL, "tok123")
+	body, code, err := c.BrowserGet(context.Background(), "/snapshot", url.Values{"tabId": {"tab-1"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code != http.StatusOK {
+		t.Fatalf("code = %d", code)
+	}
+	if string(body) != `{"ok":true}` {
+		t.Fatalf("body = %q", body)
+	}
+	if browserAuth != "Bearer tok123" {
+		t.Fatalf("browser Authorization = %q", browserAuth)
+	}
+	if len(orchestrationCalls) != 1 {
+		t.Fatalf("orchestrationCalls = %v", orchestrationCalls)
 	}
 }

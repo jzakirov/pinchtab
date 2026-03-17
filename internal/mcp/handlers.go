@@ -126,7 +126,7 @@ func handleNavigate(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.
 		if tabID := optString(r, "tabId"); tabID != "" {
 			payload["tabId"] = tabID
 		}
-		body, code, err := c.Post(ctx, "/navigate", payload)
+		body, code, err := c.BrowserPost(ctx, "/navigate", payload)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -152,7 +152,7 @@ func handleSnapshot(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.
 		if sel := optString(r, "selector"); sel != "" {
 			q.Set("selector", sel)
 		}
-		body, code, err := c.Get(ctx, "/snapshot", q)
+		body, code, err := c.BrowserGet(ctx, "/snapshot", q)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -172,7 +172,7 @@ func handleScreenshot(c *Client) func(context.Context, mcp.CallToolRequest) (*mc
 		if quality, ok := optFloat(r, "quality"); ok {
 			q.Set("quality", fmt.Sprintf("%d", int(quality)))
 		}
-		body, code, err := c.Get(ctx, "/screenshot", q)
+		body, code, err := c.BrowserGet(ctx, "/screenshot", q)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -189,7 +189,7 @@ func handleGetText(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.C
 		if v, ok := optBool(r, "raw"); ok && v {
 			q.Set("mode", "raw")
 		}
-		body, code, err := c.Get(ctx, "/text", q)
+		body, code, err := c.BrowserGet(ctx, "/text", q)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -272,7 +272,7 @@ func handleAction(c *Client, kind string) func(context.Context, mcp.CallToolRequ
 			payload["value"] = value
 		}
 
-		body, code, err := c.Post(ctx, "/action", payload)
+		body, code, err := c.BrowserPost(ctx, "/action", payload)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -330,7 +330,7 @@ func handleEval(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.Call
 		if tabID := optString(r, "tabId"); tabID != "" {
 			payload["tabId"] = tabID
 		}
-		body, code, err := c.Post(ctx, "/evaluate", payload)
+		body, code, err := c.BrowserPost(ctx, "/evaluate", payload)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -353,7 +353,7 @@ func handlePDF(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallT
 		if pr := optString(r, "pageRanges"); pr != "" {
 			q.Set("pageRanges", pr)
 		}
-		body, code, err := c.Get(ctx, "/pdf", q)
+		body, code, err := c.BrowserGet(ctx, "/pdf", q)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -371,7 +371,7 @@ func handleFind(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.Call
 		if tabID := optString(r, "tabId"); tabID != "" {
 			payload["tabId"] = tabID
 		}
-		body, code, err := c.Post(ctx, "/find", payload)
+		body, code, err := c.BrowserPost(ctx, "/find", payload)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -383,7 +383,7 @@ func handleFind(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.Call
 
 func handleListTabs(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		body, code, err := c.Get(ctx, "/tabs", nil)
+		body, code, err := c.BrowserGet(ctx, "/tabs", nil)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -397,7 +397,7 @@ func handleCloseTab(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.
 		if tabID := optString(r, "tabId"); tabID != "" {
 			payload["tabId"] = tabID
 		}
-		body, code, err := c.Post(ctx, "/tab", payload)
+		body, code, err := c.BrowserPost(ctx, "/tab", payload)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -421,7 +421,7 @@ func handleCookies(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.C
 		if tabID := optString(r, "tabId"); tabID != "" {
 			q.Set("tabId", tabID)
 		}
-		body, code, err := c.Get(ctx, "/cookies", q)
+		body, code, err := c.BrowserGet(ctx, "/cookies", q)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -513,7 +513,7 @@ func handleWaitForSelector(c *Client) func(context.Context, mcp.CallToolRequest)
 		if tabID := optString(r, "tabId"); tabID != "" {
 			payload["tabId"] = tabID
 		}
-		body, code, err := c.Post(ctx, "/wait", payload)
+		body, code, err := c.BrowserPost(ctx, "/wait", payload)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
