@@ -227,6 +227,16 @@ const fallbackHTML = `<!DOCTYPE html>
 Run <code>./dev build</code> or <code>./scripts/build-dashboard.sh</code> then rebuild the Go binary.</p>
 </div></body></html>`
 
+// SPAHTML returns the dashboard SPA HTML for serving under non-dashboard routes
+// (e.g. /live/{token}). Returns nil if the dashboard is not built.
+func SPAHTML() []byte {
+	data, err := dashboardFS.ReadFile("dashboard/dashboard.html")
+	if err != nil {
+		return nil
+	}
+	return data
+}
+
 func (d *Dashboard) handleDashboardUI(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 	w.Header().Set("Cache-Control", "no-store")

@@ -2,6 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { addTokenToUrl } from "../../services/auth";
 import * as api from "../../services/api";
 
+export interface ServerMessage {
+  type: string;
+  data?: unknown;
+}
+
 interface Props {
   instanceId: string;
   tabId: string;
@@ -11,6 +16,14 @@ interface Props {
   maxWidth?: number;
   fps?: number;
   showTitle?: boolean;
+  /** Override the WebSocket URL (e.g. for presigned /live/{token}/screencast) */
+  wsUrlOverride?: string;
+  /** Enable mouse/keyboard/scroll input forwarding to remote browser */
+  interactive?: boolean;
+  /** Called when server sends a JSON text message (tabs, urlChanged, etc.) */
+  onServerMessage?: (msg: ServerMessage) => void;
+  /** Called with a send function once the WebSocket is open, for sending commands */
+  onReady?: (send: (msg: Record<string, unknown>) => void) => void;
 }
 
 type Status = "connecting" | "streaming" | "error";
@@ -24,6 +37,10 @@ export default function ScreencastTile({
   maxWidth = 800,
   fps = 1,
   showTitle = true,
+  wsUrlOverride,
+  interactive = false,
+  onServerMessage,
+  onReady,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const socketRef = useRef<WebSocket | null>(null);
@@ -110,19 +127,27 @@ export default function ScreencastTile({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const params = new URLSearchParams({
-      tabId,
-      quality: String(quality),
-      maxWidth: String(maxWidth),
-      fps: String(localFps),
-    });
-    const path = addTokenToUrl(
-      `/instances/${encodeURIComponent(instanceId)}/proxy/screencast?${params.toString()}`,
-    );
-    const wsUrl = new URL(path, window.location.origin);
-    wsUrl.protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    let wsUrlStr: string;
+    if (wsUrlOverride) {
+      // Presigned / custom URL — append quality/fps params
+      const sep = wsUrlOverride.includes("?") ? "&" : "?";
+      wsUrlStr = `${wsUrlOverride}${sep}quality=${quality}&maxWidth=${maxWidth}&fps=${localFps}${tabId ? `&tabId=${tabId}` : ""}`;
+    } else {
+      const params = new URLSearchParams({
+        tabId,
+        quality: String(quality),
+        maxWidth: String(maxWidth),
+        fps: String(localFps),
+      });
+      const path = addTokenToUrl(
+        `/instances/${encodeURIComponent(instanceId)}/proxy/screencast?${params.toString()}`,
+      );
+      const u = new URL(path, window.location.origin);
+      u.protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      wsUrlStr = u.toString();
+    }
 
-    const socket = new WebSocket(wsUrl.toString());
+    const socket = new WebSocket(wsUrlStr);
     socket.binaryType = "arraybuffer";
     socketRef.current = socket;
 
@@ -131,27 +156,42 @@ export default function ScreencastTile({
 
     socket.onopen = () => {
       setStatus("streaming");
+      if (onReady) {
+        onReady((msg) => {
+          if (socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify(msg));
+          }
+        });
+      }
     };
 
     socket.onmessage = (evt) => {
-      const blob = new Blob([evt.data], { type: "image/jpeg" });
-      const imgUrl = URL.createObjectURL(blob);
-      const img = new Image();
-      img.onload = () => {
-        canvas.width = img.width;
-        canvas.height = img.height;
-        ctx.drawImage(img, 0, 0);
-        URL.revokeObjectURL(imgUrl);
-      };
-      img.src = imgUrl;
+      // Binary = JPEG frame
+      if (evt.data instanceof ArrayBuffer) {
+        const blob = new Blob([evt.data], { type: "image/jpeg" });
+        const imgUrl = URL.createObjectURL(blob);
+        const img = new Image();
+        img.onload = () => {
+          canvas.width = img.width;
+          canvas.height = img.height;
+          ctx.drawImage(img, 0, 0);
+          URL.revokeObjectURL(imgUrl);
+        };
+        img.src = imgUrl;
 
-      frameCount++;
-      const now = Date.now();
-      if (now - lastFpsTime >= 1000) {
-        setFpsDisplay(`${frameCount} fps`);
-        setSizeDisplay(`${(evt.data.byteLength / 1024).toFixed(0)} KB/frame`);
-        frameCount = 0;
-        lastFpsTime = now;
+        frameCount++;
+        const now = Date.now();
+        if (now - lastFpsTime >= 1000) {
+          setFpsDisplay(`${frameCount} fps`);
+          setSizeDisplay(`${(evt.data.byteLength / 1024).toFixed(0)} KB/frame`);
+          frameCount = 0;
+          lastFpsTime = now;
+        }
+        return;
+      }
+      // Text = JSON server message (tabs, urlChanged, etc.)
+      if (onServerMessage && typeof evt.data === "string") {
+        try { onServerMessage(JSON.parse(evt.data)); } catch {}
       }
     };
 
@@ -167,7 +207,49 @@ export default function ScreencastTile({
       socket.close();
       socketRef.current = null;
     };
-  }, [instanceId, tabId, quality, maxWidth, localFps]);
+  }, [instanceId, tabId, quality, maxWidth, localFps, wsUrlOverride, onServerMessage, onReady]);
+
+  // --- Interactive input helpers ---
+  const sendInput = (type: string, data: Record<string, unknown>) => {
+    const ws = socketRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type, ...data }));
+    }
+  };
+
+  const scaleCoords = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left) * (canvas.width / rect.width),
+      y: (e.clientY - rect.top) * (canvas.height / rect.height),
+    };
+  };
+
+  const mouseBtn = (b: number) => (b === 1 ? "middle" : b === 2 ? "right" : "left");
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLCanvasElement>) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "v") {
+      e.preventDefault();
+      navigator.clipboard.readText().then((text) => {
+        if (text) sendInput("paste", { text });
+      }).catch(() => {});
+      return;
+    }
+    e.preventDefault();
+    if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      sendInput("keypress", { key: e.key, code: e.code });
+    } else {
+      sendInput("keydown", { key: e.key, code: e.code });
+    }
+  };
+
+  const handleKeyUp = (e: React.KeyboardEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) return;
+    sendInput("keyup", { key: e.key, code: e.code });
+  };
 
   const statusColor =
     status === "streaming"
@@ -202,9 +284,18 @@ export default function ScreencastTile({
         ) : (
           <canvas
             ref={canvasRef}
-            className="max-h-full max-w-full object-contain"
+            className="max-h-full max-w-full object-contain focus:outline-none"
+            tabIndex={interactive ? 0 : undefined}
             width={800}
             height={600}
+            onMouseMove={interactive ? (e) => sendInput("mousemove", scaleCoords(e)) : undefined}
+            onMouseDown={interactive ? (e) => { e.preventDefault(); canvasRef.current?.focus(); sendInput("mousedown", { ...scaleCoords(e), button: mouseBtn(e.button) }); } : undefined}
+            onMouseUp={interactive ? (e) => { e.preventDefault(); sendInput("mouseup", { ...scaleCoords(e), button: mouseBtn(e.button) }); } : undefined}
+            onWheel={interactive ? (e) => { e.preventDefault(); sendInput("scroll", { ...scaleCoords(e), deltaX: e.deltaX, deltaY: e.deltaY }); } : undefined}
+            onContextMenu={interactive ? (e) => e.preventDefault() : undefined}
+            onKeyDown={interactive ? handleKeyDown : undefined}
+            onKeyUp={interactive ? handleKeyUp : undefined}
+            onClick={interactive ? () => canvasRef.current?.focus() : undefined}
           />
         )}
 

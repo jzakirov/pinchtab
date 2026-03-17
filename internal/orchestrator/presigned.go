@@ -12,7 +12,7 @@ import (
 
 	"encoding/json"
 
-	"github.com/pinchtab/pinchtab/internal/assets"
+	"github.com/pinchtab/pinchtab/internal/dashboard"
 	"github.com/pinchtab/pinchtab/internal/handlers"
 	"github.com/pinchtab/pinchtab/internal/web"
 )
@@ -131,10 +131,15 @@ func (o *Orchestrator) handleCreateShareLink(w http.ResponseWriter, r *http.Requ
 func (o *Orchestrator) handleInstanceViewer(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
-	_, _ = w.Write([]byte(assets.ViewerHTML))
+	if html := dashboard.SPAHTML(); html != nil {
+		_, _ = w.Write(html)
+	} else {
+		http.Error(w, "Dashboard not built", 503)
+	}
 }
 
-// handleLiveViewer serves the viewer page for a presigned URL.
+// handleLiveViewer serves the React SPA for a presigned URL.
+// The SPA's /live/:token route renders the fullscreen browser viewer.
 // No API auth required — the presigned token in the path IS the auth.
 //
 // GET /live/{token}
@@ -147,7 +152,12 @@ func (o *Orchestrator) handleLiveViewer(w http.ResponseWriter, r *http.Request) 
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
-	_, _ = w.Write([]byte(assets.ViewerHTML))
+	if html := dashboard.SPAHTML(); html != nil {
+		_, _ = w.Write(html)
+	} else {
+		// Fallback: minimal redirect to indicate dashboard not built
+		http.Error(w, "Dashboard not built. Run the dashboard build first.", 503)
+	}
 }
 
 // handleLiveScreencast proxies the screencast WebSocket for a presigned URL.

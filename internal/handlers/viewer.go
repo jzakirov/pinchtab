@@ -3,13 +3,13 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/pinchtab/pinchtab/internal/assets"
+	"github.com/pinchtab/pinchtab/internal/dashboard"
 	"github.com/pinchtab/pinchtab/internal/web"
 )
 
 // HandleViewer serves the interactive browser viewer page.
-// The viewer is a static HTML page that connects to the screencast WebSocket.
-// Auth is handled by passing the API token as a query parameter to the WebSocket URL.
+// In dashboard mode this serves the React SPA; in bridge-only mode it
+// returns 503 since the dashboard is not built.
 //
 // GET /viewer?apiToken=<token>&tabId=<tab-id>
 func (h *Handlers) HandleViewer(w http.ResponseWriter, r *http.Request) {
@@ -22,5 +22,9 @@ func (h *Handlers) HandleViewer(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
-	_, _ = w.Write([]byte(assets.ViewerHTML))
+	if html := dashboard.SPAHTML(); html != nil {
+		_, _ = w.Write(html)
+	} else {
+		http.Error(w, "Viewer requires the dashboard build. Use the screencast WebSocket API directly.", 503)
+	}
 }

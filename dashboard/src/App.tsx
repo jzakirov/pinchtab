@@ -10,7 +10,7 @@ import {
 import { ActivityPage } from "./activities";
 import { useAppStore } from "./stores/useAppStore";
 import { NavBar } from "./components/molecules";
-import { LoginPage, MonitoringPage, ProfilesPage, SettingsPage } from "./pages";
+import { LoginPage, MonitoringPage, ProfilesPage, SettingsPage, LiveViewerPage } from "./pages";
 import * as api from "./services/api";
 import {
   AUTH_REQUIRED_EVENT,
@@ -292,10 +292,25 @@ function AppContent() {
   );
 }
 
+function AppRouter() {
+  const location = useLocation();
+
+  // Live viewer bypasses all auth — presigned token in URL IS the auth
+  if (location.pathname.startsWith("/live/")) {
+    return (
+      <Routes>
+        <Route path="/live/:token" element={<LiveViewerPage />} />
+      </Routes>
+    );
+  }
+
+  return <AppContent />;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
-      <AppContent />
+      <AppRouter />
     </BrowserRouter>
   );
 }
