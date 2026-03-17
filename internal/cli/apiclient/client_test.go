@@ -6,10 +6,24 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 )
 
 func TestResolveProfileBaseUsesRunningInstance(t *testing.T) {
+	instance := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/health" {
+			t.Fatalf("instance path = %s", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer instance.Close()
+
+	instanceURL, err := url.Parse(instance.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	var authHeader string
 	orch := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader = r.Header.Get("Authorization")
@@ -23,14 +37,14 @@ func TestResolveProfileBaseUsesRunningInstance(t *testing.T) {
 			"name":    "work profile",
 			"running": true,
 			"status":  "running",
-			"port":    "9911",
+			"port":    instanceURL.Port(),
 			"id":      "inst_123",
 		})
 	}))
 	defer orch.Close()
 
-	got := ResolveProfileBase(orch.URL, "tok123", "work profile", "127.0.0.1")
-	if got != "http://127.0.0.1:9911" {
+	got := ResolveProfileBase(orch.URL, "tok123", "work profile", instanceURL.Hostname())
+	if got != "http://"+instanceURL.Hostname()+":"+instanceURL.Port() {
 		t.Fatalf("ResolveProfileBase() = %q", got)
 	}
 	if authHeader != "Bearer tok123" {
@@ -39,6 +53,19 @@ func TestResolveProfileBaseUsesRunningInstance(t *testing.T) {
 }
 
 func TestResolveProfileBaseStartsStoppedProfile(t *testing.T) {
+	instance := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/health" {
+			t.Fatalf("instance path = %s", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer instance.Close()
+
+	instanceURL, err := url.Parse(instance.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	var requests []string
 	var startBody string
 	orch := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -58,7 +85,7 @@ func TestResolveProfileBaseStartsStoppedProfile(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"id":          "inst_456",
 				"profileName": "tg-123",
-				"port":        "9922",
+				"port":        instanceURL.Port(),
 				"status":      "starting",
 			})
 		default:
@@ -67,8 +94,8 @@ func TestResolveProfileBaseStartsStoppedProfile(t *testing.T) {
 	}))
 	defer orch.Close()
 
-	got := ResolveProfileBase(orch.URL, "", "tg-123", "pinchtab")
-	if got != "http://pinchtab:9922" {
+	got := ResolveProfileBase(orch.URL, "", "tg-123", instanceURL.Hostname())
+	if got != "http://"+instanceURL.Hostname()+":"+instanceURL.Port() {
 		t.Fatalf("ResolveProfileBase() = %q", got)
 	}
 	if len(requests) != 2 {
@@ -119,6 +146,19 @@ func TestResolveInstanceBase(t *testing.T) {
 }
 
 func TestResolveProfileBaseWorksWithTrimmedURL(t *testing.T) {
+	instance := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/health" {
+			t.Fatalf("instance path = %s", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer instance.Close()
+
+	instanceURL, err := url.Parse(instance.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	orch := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/profiles/demo/instance" {
 			t.Fatalf("path = %s", r.URL.Path)
@@ -127,14 +167,14 @@ func TestResolveProfileBaseWorksWithTrimmedURL(t *testing.T) {
 			"name":    "demo",
 			"running": true,
 			"status":  "running",
-			"port":    "9901",
+			"port":    instanceURL.Port(),
 		})
 	}))
 	defer orch.Close()
 
 	u, _ := url.Parse(orch.URL)
-	got := ResolveProfileBase(u.String(), "", "demo", u.Hostname())
-	if got != "http://"+u.Hostname()+":9901" {
+	got := ResolveProfileBase(strings.TrimRight(u.String(), "/"), "", "demo", instanceURL.Hostname())
+	if got != "http://"+instanceURL.Hostname()+":"+instanceURL.Port() {
 		t.Fatalf("ResolveProfileBase() = %q", got)
 	}
 }

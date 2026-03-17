@@ -14,6 +14,8 @@ import (
 	"github.com/pinchtab/pinchtab/internal/activity"
 )
 
+const profileInstanceReadyTimeout = 20 * time.Second
+
 func DoGet(client *http.Client, base, token, path string, params url.Values) map[string]any {
 	u := base + path
 	if len(params) > 0 {
@@ -137,7 +139,11 @@ func ResolveProfileBase(orchBase, token, profile, bind string) string {
 		fatal("failed to resolve profile %q: %v", profile, err)
 	}
 	if status.Port != "" && (status.Running || status.Status == "starting") {
-		return fmt.Sprintf("http://%s:%s", bind, status.Port)
+		base := fmt.Sprintf("http://%s:%s", bind, status.Port)
+		if err := waitForInstanceReady(c, base, token, profileInstanceReadyTimeout); err != nil {
+			fatal("profile %q instance not ready: %v", profile, err)
+		}
+		return base
 	}
 
 	started, err := startProfileInstance(c, orchBase, token, profile)
@@ -147,7 +153,11 @@ func ResolveProfileBase(orchBase, token, profile, bind string) string {
 	if started.Port == "" {
 		fatal("profile %q started without a port", profile)
 	}
-	return fmt.Sprintf("http://%s:%s", bind, started.Port)
+	base := fmt.Sprintf("http://%s:%s", bind, started.Port)
+	if err := waitForInstanceReady(c, base, token, profileInstanceReadyTimeout); err != nil {
+		fatal("profile %q instance not ready after start: %v", profile, err)
+	}
+	return base
 }
 
 type profileInstanceStatus struct {
@@ -225,6 +235,39 @@ func startProfileInstance(client *http.Client, orchBase, token, profile string) 
 		return nil, fmt.Errorf("parse started profile instance: %w", err)
 	}
 	return &started, nil
+}
+
+func waitForInstanceReady(client *http.Client, base, token string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	var lastErr error
+
+	for time.Now().Before(deadline) {
+		req, err := http.NewRequest(http.MethodGet, base+"/health", nil)
+		if err != nil {
+			return err
+		}
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+
+		resp, err := client.Do(req)
+		if err == nil {
+			_ = resp.Body.Close()
+			if resp.StatusCode < 500 {
+				return nil
+			}
+			lastErr = fmt.Errorf("HTTP %d", resp.StatusCode)
+		} else {
+			lastErr = err
+		}
+
+		time.Sleep(250 * time.Millisecond)
+	}
+
+	if lastErr == nil {
+		lastErr = fmt.Errorf("timed out after %s", timeout)
+	}
+	return lastErr
 }
 
 func fatal(format string, args ...any) {

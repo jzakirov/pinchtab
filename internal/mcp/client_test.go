@@ -23,20 +23,19 @@ func TestNewClient(t *testing.T) {
 	}
 }
 
-func TestNewClientReadsProfileFromEnv(t *testing.T) {
-	t.Setenv("PINCHTAB_PROFILE", "tg-123")
-	c := NewClient("http://localhost:9867", "tok123")
-	if c.Profile != "tg-123" {
-		t.Fatalf("Profile = %q, want %q", c.Profile, "tg-123")
-	}
-}
-
-func TestNewClientPrefersProfileIDFromEnv(t *testing.T) {
-	t.Setenv("PINCHTAB_PROFILE", "name-profile")
+func TestNewClientReadsProfileIDFromEnv(t *testing.T) {
 	t.Setenv("PINCHTAB_PROFILE_ID", "prof_123")
 	c := NewClient("http://localhost:9867", "tok123")
 	if c.Profile != "prof_123" {
 		t.Fatalf("Profile = %q, want %q", c.Profile, "prof_123")
+	}
+}
+
+func TestNewClientIgnoresLegacyProfileEnv(t *testing.T) {
+	t.Setenv("PINCHTAB_PROFILE", "name-profile")
+	c := NewClient("http://localhost:9867", "tok123")
+	if c.Profile != "" {
+		t.Fatalf("Profile = %q, want empty", c.Profile)
 	}
 }
 
@@ -176,10 +175,14 @@ func TestClientDashboardProfilesURL(t *testing.T) {
 }
 
 func TestClientBrowserGetResolvesProfileInstance(t *testing.T) {
-	t.Setenv("PINCHTAB_PROFILE", "tg-555")
+	t.Setenv("PINCHTAB_PROFILE_ID", "tg-555")
 
 	var browserAuth string
 	instance := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/health" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
 		browserAuth = r.Header.Get("Authorization")
 		if r.URL.Path != "/snapshot" {
 			t.Fatalf("browser path = %s", r.URL.Path)
