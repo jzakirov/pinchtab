@@ -1,8 +1,11 @@
 package orchestrator
 
 import (
+	"fmt"
 	"net/http"
 
+	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/tenant"
 	"github.com/pinchtab/pinchtab/internal/web"
 )
 
@@ -70,13 +73,84 @@ func (o *Orchestrator) RegisterHandlers(mux *http.ServeMux) {
 }
 
 func (o *Orchestrator) handleList(w http.ResponseWriter, r *http.Request) {
-	web.JSON(w, 200, o.List())
+	tenantID := tenant.TenantFromContext(r.Context())
+	instances := o.List()
+	if tenantID != "" {
+		filtered := make([]bridge.Instance, 0, len(instances))
+		for _, inst := range instances {
+			if tenant.HasTenantPrefix(inst.ProfileName, tenantID) {
+				inst.ProfileName = tenant.StripTenantPrefix(inst.ProfileName, tenantID)
+				filtered = append(filtered, inst)
+			}
+		}
+		instances = filtered
+	}
+	web.JSON(w, 200, instances)
 }
 
 func (o *Orchestrator) handleAllTabs(w http.ResponseWriter, r *http.Request) {
-	web.JSON(w, 200, o.AllTabs())
+	tenantID := tenant.TenantFromContext(r.Context())
+	tabs := o.AllTabs()
+	if tenantID != "" {
+		owned := o.tenantInstanceIDs(tenantID)
+		filtered := make([]bridge.InstanceTab, 0, len(tabs))
+		for _, tab := range tabs {
+			if owned[tab.InstanceID] {
+				filtered = append(filtered, tab)
+			}
+		}
+		tabs = filtered
+	}
+	web.JSON(w, 200, tabs)
 }
 
 func (o *Orchestrator) handleAllMetrics(w http.ResponseWriter, r *http.Request) {
-	web.JSON(w, 200, o.AllMetrics())
+	tenantID := tenant.TenantFromContext(r.Context())
+	metrics := o.AllMetrics()
+	if tenantID != "" {
+		owned := o.tenantInstanceIDs(tenantID)
+		filtered := metrics[:0]
+		for _, m := range metrics {
+			if owned[m.InstanceID] {
+				m.ProfileName = tenant.StripTenantPrefix(m.ProfileName, tenantID)
+				filtered = append(filtered, m)
+			}
+		}
+		metrics = filtered
+	}
+	web.JSON(w, 200, metrics)
 }
+
+// tenantInstanceIDs returns the set of instance IDs owned by the given tenant.
+func (o *Orchestrator) tenantInstanceIDs(tenantID string) map[string]bool {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+	ids := make(map[string]bool)
+	for id, inst := range o.instances {
+		if tenant.HasTenantPrefix(inst.ProfileName, tenantID) {
+			ids[id] = true
+		}
+	}
+	return ids
+}
+
+// checkInstanceTenant verifies the caller owns the instance. Returns the
+// instance or writes a 404 and returns nil.
+func (o *Orchestrator) checkInstanceTenant(w http.ResponseWriter, id string, tenantID string) *InstanceInternal {
+	o.mu.RLock()
+	inst, ok := o.instances[id]
+	o.mu.RUnlock()
+	if !ok || !tenant.HasTenantPrefix(inst.ProfileName, tenantID) {
+		web.Error(w, 404, fmt.Errorf("instance %q not found", id))
+		return nil
+	}
+	return inst
+}
+
+func stripInstanceTenant(inst bridge.Instance, tenantID string) bridge.Instance {
+	if tenantID != "" {
+		inst.ProfileName = tenant.StripTenantPrefix(inst.ProfileName, tenantID)
+	}
+	return inst
+}
+

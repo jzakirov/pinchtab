@@ -20,6 +20,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/api/types"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/tenant"
 	"github.com/pinchtab/pinchtab/internal/idutil"
 	"github.com/pinchtab/pinchtab/internal/instance"
 	"github.com/pinchtab/pinchtab/internal/profiles"
@@ -592,7 +593,7 @@ func (o *Orchestrator) markStopped(id string) {
 	profilePath := filepath.Join(o.baseDir, profileName)
 	bridge.CleanupOrphanedChromeProcesses(profilePath)
 
-	if strings.HasPrefix(profileName, "instance-") {
+	if tenant.IsTempProfile(profileName) {
 		profilePath := filepath.Join(o.baseDir, profileName)
 		if err := os.RemoveAll(profilePath); err != nil {
 			slog.Warn("failed to delete temporary profile directory", "name", profileName, "err", err)

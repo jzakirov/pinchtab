@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/tenant"
 )
 
 type DashboardConfig struct {
@@ -171,6 +172,7 @@ func (d *Dashboard) handleSSE(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	includeMemory := r.URL.Query().Get("memory") == "1"
+	tenantID := tenant.TenantFromContext(r.Context())
 
 	// Send initial empty agent list
 	data, _ := json.Marshal([]interface{}{})
@@ -178,7 +180,7 @@ func (d *Dashboard) handleSSE(w http.ResponseWriter, r *http.Request) {
 	flusher.Flush()
 
 	if d.monitoring != nil || d.instances != nil {
-		data, _ = json.Marshal(d.monitoringSnapshot(includeMemory))
+		data, _ = json.Marshal(d.monitoringSnapshotForTenant(includeMemory, tenantID))
 		_, _ = fmt.Fprintf(w, "event: monitoring\ndata: %s\n\n", data)
 		flusher.Flush()
 	}
@@ -195,17 +197,27 @@ func (d *Dashboard) handleSSE(w http.ResponseWriter, r *http.Request) {
 			_, _ = fmt.Fprintf(w, "event: action\ndata: %s\n\n", data)
 			flusher.Flush()
 		case evt := <-sysCh:
+			if tenantID != "" {
+				if inst, ok := evt.Instance.(*bridge.Instance); ok && inst != nil {
+					if !tenant.HasTenantPrefix(inst.ProfileName, tenantID) {
+						continue
+					}
+					copy := *inst
+					copy.ProfileName = tenant.StripTenantPrefix(copy.ProfileName, tenantID)
+					evt.Instance = &copy
+				}
+			}
 			data, _ := json.Marshal(evt)
 			_, _ = fmt.Fprintf(w, "event: system\ndata: %s\n\n", data)
 			flusher.Flush()
 			if d.monitoring != nil || d.instances != nil {
-				data, _ = json.Marshal(d.monitoringSnapshot(includeMemory))
+				data, _ = json.Marshal(d.monitoringSnapshotForTenant(includeMemory, tenantID))
 				_, _ = fmt.Fprintf(w, "event: monitoring\ndata: %s\n\n", data)
 				flusher.Flush()
 			}
 		case <-monitoring.C:
 			if d.monitoring != nil || d.instances != nil {
-				data, _ = json.Marshal(d.monitoringSnapshot(includeMemory))
+				data, _ = json.Marshal(d.monitoringSnapshotForTenant(includeMemory, tenantID))
 				_, _ = fmt.Fprintf(w, "event: monitoring\ndata: %s\n\n", data)
 				flusher.Flush()
 			}

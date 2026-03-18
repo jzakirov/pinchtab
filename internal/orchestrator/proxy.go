@@ -10,6 +10,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/handlers"
 	iproxy "github.com/pinchtab/pinchtab/internal/proxy"
+	"github.com/pinchtab/pinchtab/internal/tenant"
 	"github.com/pinchtab/pinchtab/internal/web"
 )
 
@@ -25,7 +26,13 @@ func (o *Orchestrator) proxyTabRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tenantID := tenant.TenantFromContext(r.Context())
+
 	proxyToInstance := func(inst *bridge.Instance) {
+		if !tenant.HasTenantPrefix(inst.ProfileName, tenantID) {
+			web.Error(w, 404, fmt.Errorf("tab %q not found", tabID))
+			return
+		}
 		activity.EnrichRequest(r, activity.Update{
 			InstanceID:  inst.ID,
 			ProfileID:   inst.ProfileID,
