@@ -164,6 +164,8 @@ func cookieAuthAllowed(r *http.Request) bool {
 		switch {
 		case path == "/api/auth/elevate":
 			return true
+		case path == "/action":
+			return true
 		case path == "/instances/launch":
 			return true
 		case strings.HasPrefix(path, "/instances/") && strings.HasSuffix(path, "/stop"):
