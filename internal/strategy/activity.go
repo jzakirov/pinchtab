@@ -5,6 +5,7 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/orchestrator"
+	"github.com/pinchtab/pinchtab/internal/tenant"
 )
 
 func EnrichForTarget(r *http.Request, orch *orchestrator.Orchestrator, target string) {
@@ -12,8 +13,12 @@ func EnrichForTarget(r *http.Request, orch *orchestrator.Orchestrator, target st
 		return
 	}
 
+	tenantID := tenant.TenantFromContext(r.Context())
 	for _, inst := range orch.List() {
 		if inst.Status != "running" || inst.URL != target {
+			continue
+		}
+		if tenantID != "" && !tenant.HasTenantPrefix(inst.ProfileName, tenantID) {
 			continue
 		}
 		activity.EnrichRequest(r, activity.Update{
@@ -23,4 +28,11 @@ func EnrichForTarget(r *http.Request, orch *orchestrator.Orchestrator, target st
 		})
 		return
 	}
+}
+
+func TargetForRequest(r *http.Request, orch *orchestrator.Orchestrator) string {
+	if orch == nil {
+		return ""
+	}
+	return orch.FirstRunningURLForTenant(tenant.TenantFromContext(r.Context()))
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/pinchtab/pinchtab/internal/tenant"
 	"github.com/pinchtab/pinchtab/internal/web"
 )
 
@@ -23,9 +24,10 @@ func (o *Orchestrator) resolveProfileName(idOrName string) (string, error) {
 
 func (o *Orchestrator) handleStartByID(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	tenantID := tenant.TenantFromContext(r.Context())
 	name, err := o.resolveProfileName(id)
-	if err != nil {
-		web.Error(w, 404, err)
+	if err != nil || !tenant.HasTenantPrefix(name, tenantID) {
+		web.Error(w, 404, fmt.Errorf("profile %q not found", id))
 		return
 	}
 
@@ -46,9 +48,10 @@ func (o *Orchestrator) handleStartByID(w http.ResponseWriter, r *http.Request) {
 
 func (o *Orchestrator) handleStopByID(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	tenantID := tenant.TenantFromContext(r.Context())
 	name, err := o.resolveProfileName(id)
-	if err != nil {
-		web.Error(w, 404, err)
+	if err != nil || !tenant.HasTenantPrefix(name, tenantID) {
+		web.Error(w, 404, fmt.Errorf("profile %q not found", id))
 		return
 	}
 	if err := o.StopProfile(name); err != nil {
@@ -60,8 +63,9 @@ func (o *Orchestrator) handleStopByID(w http.ResponseWriter, r *http.Request) {
 
 func (o *Orchestrator) handleProfileInstance(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	tenantID := tenant.TenantFromContext(r.Context())
 	name, err := o.resolveProfileName(id)
-	if err != nil {
+	if err != nil || !tenant.HasTenantPrefix(name, tenantID) {
 		web.JSON(w, 200, map[string]any{
 			"name":    id,
 			"running": false,
@@ -71,11 +75,12 @@ func (o *Orchestrator) handleProfileInstance(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	displayName := tenant.StripTenantPrefix(name, tenantID)
 	instances := o.List()
 	for _, inst := range instances {
 		if inst.ProfileName == name && (inst.Status == "running" || inst.Status == "starting") {
 			web.JSON(w, 200, map[string]any{
-				"name":    name,
+				"name":    displayName,
 				"running": inst.Status == "running",
 				"status":  inst.Status,
 				"port":    inst.Port,
@@ -85,7 +90,7 @@ func (o *Orchestrator) handleProfileInstance(w http.ResponseWriter, r *http.Requ
 		}
 	}
 	web.JSON(w, 200, map[string]any{
-		"name":    name,
+		"name":    displayName,
 		"running": false,
 		"status":  "stopped",
 		"port":    "",

@@ -8,19 +8,19 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pinchtab/pinchtab/internal/tenant"
 	"github.com/pinchtab/pinchtab/internal/web"
 )
 
 func (o *Orchestrator) handleGetInstance(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	o.mu.RLock()
-	inst, ok := o.instances[id]
-	if !ok {
-		o.mu.RUnlock()
-		web.Error(w, 404, fmt.Errorf("instance %q not found", id))
+	tenantID := tenant.TenantFromContext(r.Context())
+	if inst := o.checkInstanceTenant(w, id, tenantID); inst == nil {
 		return
 	}
 
+	o.mu.RLock()
+	inst := o.instances[id]
 	copyInst := inst.Instance
 	active := instanceIsActive(inst)
 	o.mu.RUnlock()
@@ -33,7 +33,7 @@ func (o *Orchestrator) handleGetInstance(w http.ResponseWriter, r *http.Request)
 		copyInst.Status = "stopped"
 	}
 
-	web.JSON(w, 200, copyInst)
+	web.JSON(w, 200, stripInstanceTenant(copyInst, tenantID))
 }
 
 func (o *Orchestrator) handleLaunchByName(w http.ResponseWriter, r *http.Request) {
@@ -53,6 +53,7 @@ func (o *Orchestrator) handleLaunchByName(w http.ResponseWriter, r *http.Request
 	}
 
 	headless := req.Mode != "headed"
+	tenantID := tenant.TenantFromContext(r.Context())
 
 	var name string
 	if req.ProfileId != "" {
@@ -64,6 +65,9 @@ func (o *Orchestrator) handleLaunchByName(w http.ResponseWriter, r *http.Request
 		found := false
 		for _, p := range profs {
 			if p.ID == req.ProfileId {
+				if !tenant.HasTenantPrefix(p.Name, tenantID) {
+					break
+				}
 				name = p.Name
 				found = true
 				break
@@ -74,9 +78,9 @@ func (o *Orchestrator) handleLaunchByName(w http.ResponseWriter, r *http.Request
 			return
 		}
 	} else if req.Name != "" {
-		name = req.Name
+		name = tenant.AddTenantPrefix(req.Name, tenantID)
 	} else {
-		name = fmt.Sprintf("instance-%d", time.Now().UnixNano())
+		name = tenant.AddTenantPrefix(fmt.Sprintf("instance-%d", time.Now().UnixNano()), tenantID)
 	}
 
 	inst, err := o.Launch(name, req.Port, headless, req.ExtensionPaths)
@@ -85,11 +89,15 @@ func (o *Orchestrator) handleLaunchByName(w http.ResponseWriter, r *http.Request
 		web.Error(w, statusCode, err)
 		return
 	}
-	web.JSON(w, 201, inst)
+	web.JSON(w, 201, stripInstanceTenant(*inst, tenantID))
 }
 
 func (o *Orchestrator) handleStopByInstanceID(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	tenantID := tenant.TenantFromContext(r.Context())
+	if inst := o.checkInstanceTenant(w, id, tenantID); inst == nil {
+		return
+	}
 	if err := o.Stop(id); err != nil {
 		web.Error(w, 404, err)
 		return
@@ -99,6 +107,10 @@ func (o *Orchestrator) handleStopByInstanceID(w http.ResponseWriter, r *http.Req
 
 func (o *Orchestrator) handleStartByInstanceID(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	tenantID := tenant.TenantFromContext(r.Context())
+	if checked := o.checkInstanceTenant(w, id, tenantID); checked == nil {
+		return
+	}
 
 	o.mu.RLock()
 	inst, ok := o.instances[id]
@@ -144,6 +156,10 @@ func (o *Orchestrator) handleStartByInstanceID(w http.ResponseWriter, r *http.Re
 
 func (o *Orchestrator) handleLogsByID(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	tenantID := tenant.TenantFromContext(r.Context())
+	if inst := o.checkInstanceTenant(w, id, tenantID); inst == nil {
+		return
+	}
 	logs, err := o.Logs(id)
 	if err != nil {
 		web.Error(w, 404, err)
@@ -166,6 +182,10 @@ func (o *Orchestrator) handleLogsStreamByID(w http.ResponseWriter, r *http.Reque
 	}
 
 	id := r.PathValue("id")
+	tenantID := tenant.TenantFromContext(r.Context())
+	if inst := o.checkInstanceTenant(w, id, tenantID); inst == nil {
+		return
+	}
 	initial, err := o.Logs(id)
 	if err != nil {
 		web.Error(w, 404, err)
@@ -236,17 +256,18 @@ func (o *Orchestrator) handleStartInstance(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
+	tenantID := tenant.TenantFromContext(r.Context())
 	var profileName string
 	var err error
 
 	if req.ProfileID != "" {
 		profileName, err = o.resolveProfileName(req.ProfileID)
-		if err != nil {
+		if err != nil || !tenant.HasTenantPrefix(profileName, tenantID) {
 			web.Error(w, 404, fmt.Errorf("profile %q not found", req.ProfileID))
 			return
 		}
 	} else {
-		profileName = fmt.Sprintf("instance-%d", time.Now().UnixNano())
+		profileName = tenant.AddTenantPrefix(fmt.Sprintf("instance-%d", time.Now().UnixNano()), tenantID)
 	}
 
 	headless := req.Mode != "headed"
@@ -258,11 +279,15 @@ func (o *Orchestrator) handleStartInstance(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	web.JSON(w, 201, inst)
+	web.JSON(w, 201, stripInstanceTenant(*inst, tenantID))
 }
 
 func (o *Orchestrator) handleInstanceTabs(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	tenantID := tenant.TenantFromContext(r.Context())
+	if checked := o.checkInstanceTenant(w, id, tenantID); checked == nil {
+		return
+	}
 
 	o.mu.RLock()
 	inst, ok := o.instances[id]
@@ -320,10 +345,12 @@ func (o *Orchestrator) handleAttachInstance(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Generate name if not provided
+	tenantID := tenant.TenantFromContext(r.Context())
 	name := req.Name
 	if name == "" {
 		name = fmt.Sprintf("attached-%d", time.Now().UnixNano())
 	}
+	name = tenant.AddTenantPrefix(name, tenantID)
 
 	inst, err := o.Attach(name, req.CdpURL)
 	if err != nil {
@@ -331,7 +358,7 @@ func (o *Orchestrator) handleAttachInstance(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	web.JSON(w, 201, inst)
+	web.JSON(w, 201, stripInstanceTenant(*inst, tenantID))
 }
 
 func (o *Orchestrator) handleAttachBridge(w http.ResponseWriter, r *http.Request) {
@@ -358,17 +385,19 @@ func (o *Orchestrator) handleAttachBridge(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	tenantID := tenant.TenantFromContext(r.Context())
 	name := req.Name
 	if name == "" {
 		name = fmt.Sprintf("bridge-%d", time.Now().UnixNano())
 	}
+	name = tenant.AddTenantPrefix(name, tenantID)
 
 	inst, err := o.AttachBridge(name, req.BaseURL, req.Token)
 	if err != nil {
 		web.Error(w, classifyLaunchError(err), err)
 		return
 	}
-	web.JSON(w, 201, inst)
+	web.JSON(w, 201, stripInstanceTenant(*inst, tenantID))
 }
 
 // probeAttachBridge checks that a remote bridge is reachable.

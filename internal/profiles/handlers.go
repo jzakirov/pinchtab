@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/pinchtab/pinchtab/internal/tenant"
 	"github.com/pinchtab/pinchtab/internal/web"
 )
 
@@ -32,15 +33,17 @@ func (pm *ProfileManager) handleList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tenantID := tenant.TenantFromContext(r.Context())
+
 	showAll := r.URL.Query().Get("all") == "true"
 	if !showAll {
 		filtered := []map[string]any{}
 		for _, p := range profiles {
-			if !p.Temporary {
+			if !p.Temporary && tenant.HasTenantPrefix(p.Name, tenantID) {
 				sizeMB := float64(p.DiskUsage) / (1024 * 1024)
 				filtered = append(filtered, map[string]any{
 					"id":                p.ID,
-					"name":              p.Name,
+					"name":              tenant.StripTenantPrefix(p.Name, tenantID),
 					"path":              p.Path,
 					"pathExists":        p.PathExists,
 					"created":           p.Created,
@@ -80,12 +83,15 @@ func (pm *ProfileManager) handleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tenantID := tenant.TenantFromContext(r.Context())
+	storedName := tenant.AddTenantPrefix(req.Name, tenantID)
+
 	meta := ProfileMeta{
 		Description: req.Description,
 		UseWhen:     req.UseWhen,
 	}
 
-	if err := pm.CreateWithMeta(req.Name, meta); err != nil {
+	if err := pm.CreateWithMeta(storedName, meta); err != nil {
 		// Validation errors → 400, already exists → 409, others → 500
 		if strings.Contains(err.Error(), "cannot contain") || strings.Contains(err.Error(), "cannot be empty") {
 			web.Error(w, 400, err)
@@ -97,7 +103,7 @@ func (pm *ProfileManager) handleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	generatedID := profileID(req.Name)
+	generatedID := profileID(storedName)
 	web.JSON(w, 200, map[string]any{
 		"status": "created",
 		"id":     generatedID,
@@ -121,12 +127,15 @@ func (pm *ProfileManager) handleImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tenantID := tenant.TenantFromContext(r.Context())
+	storedName := tenant.AddTenantPrefix(req.Name, tenantID)
+
 	meta := ProfileMeta{
 		Description: req.Description,
 		UseWhen:     req.UseWhen,
 	}
 
-	if err := pm.ImportWithMeta(req.Name, req.SourcePath, meta); err != nil {
+	if err := pm.ImportWithMeta(storedName, req.SourcePath, meta); err != nil {
 		web.Error(w, 500, err)
 		return
 	}
@@ -148,6 +157,9 @@ func (pm *ProfileManager) handleUpdateMeta(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	tenantID := tenant.TenantFromContext(r.Context())
+	storedName := tenant.AddTenantPrefix(req.Name, tenantID)
+
 	updates := make(map[string]string)
 	if req.Description != nil {
 		updates["description"] = *req.Description
@@ -156,7 +168,7 @@ func (pm *ProfileManager) handleUpdateMeta(w http.ResponseWriter, r *http.Reques
 		updates["useWhen"] = *req.UseWhen
 	}
 
-	if err := pm.UpdateMeta(req.Name, updates); err != nil {
+	if err := pm.UpdateMeta(storedName, updates); err != nil {
 		web.Error(w, 500, err)
 		return
 	}
@@ -165,6 +177,7 @@ func (pm *ProfileManager) handleUpdateMeta(w http.ResponseWriter, r *http.Reques
 
 func (pm *ProfileManager) handleGetByID(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	tenantID := tenant.TenantFromContext(r.Context())
 
 	profiles, err := pm.List()
 	if err != nil {
@@ -175,12 +188,15 @@ func (pm *ProfileManager) handleGetByID(w http.ResponseWriter, r *http.Request) 
 	var foundProfile map[string]any
 
 	for _, p := range profiles {
-		if p.ID != id && p.Name != id {
+		if p.ID != id && p.Name != id && p.Name != tenant.AddTenantPrefix(id, tenantID) {
+			continue
+		}
+		if !tenant.HasTenantPrefix(p.Name, tenantID) {
 			continue
 		}
 		foundProfile = map[string]any{
 			"id":                p.ID,
-			"name":              p.Name,
+			"name":              tenant.StripTenantPrefix(p.Name, tenantID),
 			"path":              p.Path,
 			"pathExists":        p.PathExists,
 			"created":           p.Created,
@@ -207,10 +223,15 @@ func (pm *ProfileManager) handleGetByID(w http.ResponseWriter, r *http.Request) 
 
 func (pm *ProfileManager) handleDeleteByID(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	tenantID := tenant.TenantFromContext(r.Context())
 
 	name, err := pm.resolveIDOnly(id)
 	if err != nil {
 		web.Error(w, 404, err)
+		return
+	}
+	if !tenant.HasTenantPrefix(name, tenantID) {
+		web.Error(w, 404, fmt.Errorf("profile %q not found", id))
 		return
 	}
 
@@ -219,7 +240,7 @@ func (pm *ProfileManager) handleDeleteByID(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	web.JSON(w, 200, map[string]any{"status": "deleted", "id": id, "name": name})
+	web.JSON(w, 200, map[string]any{"status": "deleted", "id": id, "name": tenant.StripTenantPrefix(name, tenantID)})
 }
 
 func (pm *ProfileManager) resolveIDOrName(idOrName string) (string, error) {
@@ -243,9 +264,14 @@ func (pm *ProfileManager) resolveIDOnly(id string) (string, error) {
 
 func (pm *ProfileManager) handleUpdateByID(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	tenantID := tenant.TenantFromContext(r.Context())
 	name, err := pm.resolveIDOnly(id)
 	if err != nil {
 		web.Error(w, 404, err)
+		return
+	}
+	if !tenant.HasTenantPrefix(name, tenantID) {
+		web.Error(w, 404, fmt.Errorf("profile %q not found", id))
 		return
 	}
 
@@ -260,8 +286,10 @@ func (pm *ProfileManager) handleUpdateByID(w http.ResponseWriter, r *http.Reques
 	}
 
 	finalName := name
-	if req.Name != nil && *req.Name != name {
-		if err := pm.Rename(name, *req.Name); err != nil {
+	displayName := tenant.StripTenantPrefix(name, tenantID)
+	if req.Name != nil && *req.Name != displayName {
+		renamed := tenant.AddTenantPrefix(*req.Name, tenantID)
+		if err := pm.Rename(name, renamed); err != nil {
 			if strings.Contains(err.Error(), "already exists") {
 				web.Error(w, 409, err)
 			} else if strings.Contains(err.Error(), "cannot contain") || strings.Contains(err.Error(), "cannot be empty") {
@@ -271,7 +299,7 @@ func (pm *ProfileManager) handleUpdateByID(w http.ResponseWriter, r *http.Reques
 			}
 			return
 		}
-		finalName = *req.Name
+		finalName = renamed
 	}
 
 	updates := make(map[string]string)
@@ -288,14 +316,23 @@ func (pm *ProfileManager) handleUpdateByID(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	web.JSON(w, 200, map[string]any{"status": "updated", "id": profileID(finalName), "name": finalName})
+	web.JSON(w, 200, map[string]any{
+		"status": "updated",
+		"id":     profileID(finalName),
+		"name":   tenant.StripTenantPrefix(finalName, tenantID),
+	})
 }
 
 func (pm *ProfileManager) handleResetByIDOrName(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	tenantID := tenant.TenantFromContext(r.Context())
 	name, err := pm.resolveIDOnly(id)
 	if err != nil {
 		web.Error(w, 404, err)
+		return
+	}
+	if !tenant.HasTenantPrefix(name, tenantID) {
+		web.Error(w, 404, fmt.Errorf("profile %q not found", id))
 		return
 	}
 
@@ -303,14 +340,19 @@ func (pm *ProfileManager) handleResetByIDOrName(w http.ResponseWriter, r *http.R
 		web.Error(w, 500, err)
 		return
 	}
-	web.JSON(w, 200, map[string]any{"status": "reset", "id": id, "name": name})
+	web.JSON(w, 200, map[string]any{"status": "reset", "id": id, "name": tenant.StripTenantPrefix(name, tenantID)})
 }
 
 func (pm *ProfileManager) handleLogsByIDOrName(w http.ResponseWriter, r *http.Request) {
 	idOrName := r.PathValue("id")
+	tenantID := tenant.TenantFromContext(r.Context())
 	name, err := pm.resolveIDOrName(idOrName)
 	if err != nil {
 		web.Error(w, 404, err)
+		return
+	}
+	if !tenant.HasTenantPrefix(name, tenantID) {
+		web.Error(w, 404, fmt.Errorf("profile %q not found", idOrName))
 		return
 	}
 
@@ -321,9 +363,14 @@ func (pm *ProfileManager) handleLogsByIDOrName(w http.ResponseWriter, r *http.Re
 
 func (pm *ProfileManager) handleAnalyticsByIDOrName(w http.ResponseWriter, r *http.Request) {
 	idOrName := r.PathValue("id")
+	tenantID := tenant.TenantFromContext(r.Context())
 	name, err := pm.resolveIDOrName(idOrName)
 	if err != nil {
 		web.Error(w, 404, err)
+		return
+	}
+	if !tenant.HasTenantPrefix(name, tenantID) {
+		web.Error(w, 404, fmt.Errorf("profile %q not found", idOrName))
 		return
 	}
 

@@ -23,6 +23,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/idutil"
 	"github.com/pinchtab/pinchtab/internal/instance"
 	"github.com/pinchtab/pinchtab/internal/profiles"
+	"github.com/pinchtab/pinchtab/internal/tenant"
 )
 
 // InstanceEvent is emitted when instance state changes.
@@ -246,6 +247,9 @@ func installStableBinary(src, dst string) error {
 }
 
 func (o *Orchestrator) Launch(name, port string, headless bool, extensionPaths []string) (*bridge.Instance, error) {
+	if o != nil && o.runtimeCfg != nil && o.runtimeCfg.DisableLocalLaunch {
+		return nil, fmt.Errorf("local instance launch is disabled")
+	}
 	// Validate profile name to prevent path traversal attacks
 	if err := profiles.ValidateProfileName(name); err != nil {
 		return nil, err
@@ -592,7 +596,7 @@ func (o *Orchestrator) markStopped(id string) {
 	profilePath := filepath.Join(o.baseDir, profileName)
 	bridge.CleanupOrphanedChromeProcesses(profilePath)
 
-	if strings.HasPrefix(profileName, "instance-") {
+	if tenant.IsTempProfile(profileName) {
 		profilePath := filepath.Join(o.baseDir, profileName)
 		if err := os.RemoveAll(profilePath); err != nil {
 			slog.Warn("failed to delete temporary profile directory", "name", profileName, "err", err)
@@ -652,6 +656,10 @@ func (o *Orchestrator) Logs(id string) (string, error) {
 }
 
 func (o *Orchestrator) FirstRunningURL() string {
+	return o.FirstRunningURLForTenant("")
+}
+
+func (o *Orchestrator) FirstRunningURLForTenant(tenantID string) string {
 	o.mu.RLock()
 	defer o.mu.RUnlock()
 	// Collect running instances and sort by start time for determinism.
@@ -663,6 +671,9 @@ func (o *Orchestrator) FirstRunningURL() string {
 	var candidates []candidate
 	for _, inst := range o.instances {
 		if inst.Status == "running" && instanceIsActive(inst) {
+			if tenantID != "" && !tenant.HasTenantPrefix(inst.ProfileName, tenantID) {
+				continue
+			}
 			if inst.URL == "" {
 				continue
 			}

@@ -65,7 +65,7 @@ func (s *Strategy) RegisterRoutes(mux *http.ServeMux) {
 }
 
 func (s *Strategy) proxyToFirst(w http.ResponseWriter, r *http.Request) {
-	target := s.orch.FirstRunningURL()
+	target := strategy.TargetForRequest(r, s.orch)
 	if target == "" {
 		web.Error(w, 503, fmt.Errorf("no running instances — launch one from the Profiles tab"))
 		return
@@ -75,7 +75,7 @@ func (s *Strategy) proxyToFirst(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Strategy) handleTabs(w http.ResponseWriter, r *http.Request) {
-	target := s.orch.FirstRunningURL()
+	target := strategy.TargetForRequest(r, s.orch)
 	if target == "" {
 		web.JSON(w, 200, map[string]any{"tabs": []any{}})
 		return

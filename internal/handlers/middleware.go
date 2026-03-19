@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/tenant"
 	"github.com/pinchtab/pinchtab/internal/web"
 )
 
@@ -76,6 +77,13 @@ func AuthMiddleware(cfg *config.RuntimeConfig, next http.Handler) http.Handler {
 				} else {
 					provided = auth
 				}
+			}
+
+			// Try HMAC tenant token first (format: tenantID:signature)
+			if tenantID, ok := tenant.ValidateHMACToken(provided, cfg.Token); ok {
+				ctx := tenant.WithTenant(r.Context(), tenantID)
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
 			}
 
 			if subtle.ConstantTimeCompare([]byte(provided), []byte(cfg.Token)) != 1 {
