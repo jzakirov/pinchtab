@@ -65,19 +65,6 @@ func (pm *ProfileManager) handleList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// showAll=true: still filter by tenant
-	if tenantID != "" {
-		tenantFiltered := make([]any, 0)
-		for _, p := range profiles {
-			if tenant.HasTenantPrefix(p.Name, tenantID) {
-				p.Name = tenant.StripTenantPrefix(p.Name, tenantID)
-				tenantFiltered = append(tenantFiltered, p)
-			}
-		}
-		web.JSON(w, 200, tenantFiltered)
-		return
-	}
-
 	web.JSON(w, 200, profiles)
 }
 
@@ -299,8 +286,10 @@ func (pm *ProfileManager) handleUpdateByID(w http.ResponseWriter, r *http.Reques
 	}
 
 	finalName := name
-	if req.Name != nil && *req.Name != name {
-		if err := pm.Rename(name, *req.Name); err != nil {
+	displayName := tenant.StripTenantPrefix(name, tenantID)
+	if req.Name != nil && *req.Name != displayName {
+		renamed := tenant.AddTenantPrefix(*req.Name, tenantID)
+		if err := pm.Rename(name, renamed); err != nil {
 			if strings.Contains(err.Error(), "already exists") {
 				web.Error(w, 409, err)
 			} else if strings.Contains(err.Error(), "cannot contain") || strings.Contains(err.Error(), "cannot be empty") {
@@ -310,7 +299,7 @@ func (pm *ProfileManager) handleUpdateByID(w http.ResponseWriter, r *http.Reques
 			}
 			return
 		}
-		finalName = *req.Name
+		finalName = renamed
 	}
 
 	updates := make(map[string]string)
@@ -327,7 +316,11 @@ func (pm *ProfileManager) handleUpdateByID(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	web.JSON(w, 200, map[string]any{"status": "updated", "id": profileID(finalName), "name": finalName})
+	web.JSON(w, 200, map[string]any{
+		"status": "updated",
+		"id":     profileID(finalName),
+		"name":   tenant.StripTenantPrefix(finalName, tenantID),
+	})
 }
 
 func (pm *ProfileManager) handleResetByIDOrName(w http.ResponseWriter, r *http.Request) {

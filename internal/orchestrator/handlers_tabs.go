@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/pinchtab/pinchtab/internal/tenant"
 	"github.com/pinchtab/pinchtab/internal/web"
 )
 
@@ -24,12 +23,6 @@ func (o *Orchestrator) handleTabClose(w http.ResponseWriter, r *http.Request) {
 	inst, err := o.findRunningInstanceByTabID(tabID)
 	if err != nil {
 		web.Error(w, 404, err)
-		return
-	}
-
-	tenantID := tenant.TenantFromContext(r.Context())
-	if !tenant.HasTenantPrefix(inst.ProfileName, tenantID) {
-		web.Error(w, 404, fmt.Errorf("tab %q not found", tabID))
 		return
 	}
 
@@ -70,10 +63,6 @@ func (o *Orchestrator) handleTabClose(w http.ResponseWriter, r *http.Request) {
 // This has custom logic so it's not genericized.
 func (o *Orchestrator) handleInstanceTabOpen(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	tenantID := tenant.TenantFromContext(r.Context())
-	if checked := o.checkInstanceTenant(w, id, tenantID); checked == nil {
-		return
-	}
 
 	o.mu.RLock()
 	inst, ok := o.instances[id]

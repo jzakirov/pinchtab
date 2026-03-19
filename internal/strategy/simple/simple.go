@@ -18,6 +18,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/orchestrator"
 	"github.com/pinchtab/pinchtab/internal/proxy"
 	"github.com/pinchtab/pinchtab/internal/strategy"
+	"github.com/pinchtab/pinchtab/internal/tenant"
 	"github.com/pinchtab/pinchtab/internal/web"
 )
 
@@ -73,7 +74,7 @@ func (s *Strategy) RegisterRoutes(mux *http.ServeMux) {
 
 // proxyToFirst ensures an instance is running, then proxies the request to it.
 func (s *Strategy) proxyToFirst(w http.ResponseWriter, r *http.Request) {
-	target, err := s.ensureRunning()
+	target, err := s.ensureRunning(r)
 	if err != nil {
 		web.Error(w, 503, err)
 		return
@@ -83,7 +84,7 @@ func (s *Strategy) proxyToFirst(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Strategy) handleTabs(w http.ResponseWriter, r *http.Request) {
-	target := s.orch.FirstRunningURL()
+	target := strategy.TargetForRequest(r, s.orch)
 	if target == "" {
 		web.JSON(w, 200, map[string]any{"tabs": []any{}})
 		return
@@ -92,11 +93,12 @@ func (s *Strategy) handleTabs(w http.ResponseWriter, r *http.Request) {
 }
 
 // ensureRunning returns the URL of a running instance, auto-launching one if needed.
-func (s *Strategy) ensureRunning() (string, error) {
+func (s *Strategy) ensureRunning(r *http.Request) (string, error) {
 	if s.orch == nil {
 		return "", fmt.Errorf("no running instances")
 	}
-	if target := s.orch.FirstRunningURL(); target != "" {
+	tenantID := tenant.TenantFromContext(r.Context())
+	if target := s.orch.FirstRunningURLForTenant(tenantID); target != "" {
 		return target, nil
 	}
 
@@ -106,7 +108,8 @@ func (s *Strategy) ensureRunning() (string, error) {
 		return "", fmt.Errorf("no running instances")
 	}
 
-	launched, err := mgr.Launch("default", "", true)
+	profileName := tenant.AddTenantPrefix("default", tenantID)
+	launched, err := mgr.Launch(profileName, "", true)
 	if err != nil {
 		return "", fmt.Errorf("auto-launch failed: %w", err)
 	}

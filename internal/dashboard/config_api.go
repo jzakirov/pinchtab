@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
-	"github.com/pinchtab/pinchtab/internal/tenant"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/web"
 )
@@ -100,18 +99,7 @@ func (c *ConfigAPI) HandleHealth(w http.ResponseWriter, r *http.Request) {
 	web.JSON(w, 200, info)
 }
 
-func requireAdmin(w http.ResponseWriter, r *http.Request) bool {
-	if tenant.TenantFromContext(r.Context()) != "" {
-		web.ErrorCode(w, 403, "forbidden", "admin access required", false, nil)
-		return false
-	}
-	return true
-}
-
 func (c *ConfigAPI) HandleGetConfig(w http.ResponseWriter, r *http.Request) {
-	if !requireAdmin(w, r) {
-		return
-	}
 	cfg, path, restartReasons, err := c.currentConfig()
 	if err != nil {
 		web.Error(w, 500, err)
@@ -126,9 +114,6 @@ func (c *ConfigAPI) HandleGetConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *ConfigAPI) HandlePutConfig(w http.ResponseWriter, r *http.Request) {
-	if !requireAdmin(w, r) {
-		return
-	}
 	normalized := config.DefaultFileConfig()
 	if err := json.NewDecoder(r.Body).Decode(&normalized); err != nil {
 		web.ErrorCode(w, 400, "bad_config_json", "invalid config payload", false, nil)
@@ -174,9 +159,6 @@ func (c *ConfigAPI) HandlePutConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *ConfigAPI) HandleGenerateToken(w http.ResponseWriter, r *http.Request) {
-	if !requireAdmin(w, r) {
-		return
-	}
 	token, err := config.GenerateAuthToken()
 	if err != nil {
 		web.Error(w, 500, err)
