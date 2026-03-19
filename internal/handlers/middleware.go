@@ -264,6 +264,21 @@ func isWebSocketUpgrade(r *http.Request) bool {
 }
 
 func requestScheme(r *http.Request) string {
+	if r == nil {
+		return "http"
+	}
+	if forwarded := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")); forwarded != "" {
+		return strings.ToLower(strings.TrimSpace(strings.Split(forwarded, ",")[0]))
+	}
+	if forwarded := strings.TrimSpace(r.Header.Get("Forwarded")); forwarded != "" {
+		for _, part := range strings.Split(forwarded, ";") {
+			key, value, ok := strings.Cut(strings.TrimSpace(part), "=")
+			if !ok || !strings.EqualFold(key, "proto") {
+				continue
+			}
+			return strings.ToLower(strings.Trim(value, `"`))
+		}
+	}
 	if r != nil && r.TLS != nil {
 		return "https"
 	}
@@ -273,6 +288,18 @@ func requestScheme(r *http.Request) string {
 func requestHost(r *http.Request) string {
 	if r == nil {
 		return ""
+	}
+	if forwarded := strings.TrimSpace(r.Header.Get("X-Forwarded-Host")); forwarded != "" {
+		return strings.TrimSpace(strings.Split(forwarded, ",")[0])
+	}
+	if forwarded := strings.TrimSpace(r.Header.Get("Forwarded")); forwarded != "" {
+		for _, part := range strings.Split(forwarded, ";") {
+			key, value, ok := strings.Cut(strings.TrimSpace(part), "=")
+			if !ok || !strings.EqualFold(key, "host") {
+				continue
+			}
+			return strings.Trim(value, `"`)
+		}
 	}
 	return strings.TrimSpace(r.Host)
 }
