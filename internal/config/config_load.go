@@ -194,6 +194,9 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	if fc.Server.NetworkBufferSize != nil && *fc.Server.NetworkBufferSize > 0 {
 		cfg.NetworkBufferSize = ClampNetworkBufferSize(*fc.Server.NetworkBufferSize)
 	}
+	if fc.Server.TrustProxyHeaders != nil {
+		cfg.TrustProxyHeaders = *fc.Server.TrustProxyHeaders
+	}
 	// Security
 	if fc.Security.AllowEvaluate != nil {
 		cfg.AllowEvaluate = *fc.Security.AllowEvaluate

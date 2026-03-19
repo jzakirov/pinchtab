@@ -45,6 +45,12 @@ func setServerField(s *ServerConfig, field, value string) error {
 		s.Token = value
 	case "stateDir":
 		s.StateDir = value
+	case "trustProxyHeaders":
+		b, err := parseBool(value)
+		if err != nil {
+			return fmt.Errorf("server.trustProxyHeaders must be true or false: %w", err)
+		}
+		s.TrustProxyHeaders = &b
 	default:
 		return fmt.Errorf("unknown field server.%s", field)
 	}

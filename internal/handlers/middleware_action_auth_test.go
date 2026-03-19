@@ -1,8 +1,9 @@
 package handlers
 
-import "net/http/httptest"
-
-import "testing"
+import (
+	"net/http/httptest"
+	"testing"
+)
 
 func TestCookieAuthAllowed_ActionPost(t *testing.T) {
 	req := httptest.NewRequest("POST", "/action", nil)
@@ -10,4 +11,3 @@ func TestCookieAuthAllowed_ActionPost(t *testing.T) {
 		t.Fatal("expected cookie auth to allow POST /action for dashboard same-origin sessions")
 	}
 }
-

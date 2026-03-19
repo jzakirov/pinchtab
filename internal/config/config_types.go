@@ -12,6 +12,7 @@ type RuntimeConfig struct {
 	InstancePortEnd   int // Ending port for instances (default 9968)
 	Token             string
 	StateDir          string
+	TrustProxyHeaders bool // Only trust X-Forwarded-*/Forwarded headers when behind a trusted reverse proxy
 
 	// Security settings
 	AllowEvaluate          bool
@@ -141,6 +142,7 @@ type ServerConfig struct {
 	StateDir          string `json:"stateDir,omitempty"`
 	Engine            string `json:"engine,omitempty"`
 	NetworkBufferSize *int   `json:"networkBufferSize,omitempty"`
+	TrustProxyHeaders *bool  `json:"trustProxyHeaders,omitempty"`
 }
 
 type BrowserConfig struct {

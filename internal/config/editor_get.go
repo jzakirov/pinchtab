@@ -46,6 +46,8 @@ func getServerField(s *ServerConfig, field string) (string, error) {
 		return s.Token, nil
 	case "stateDir":
 		return s.StateDir, nil
+	case "trustProxyHeaders":
+		return formatBoolPtr(s.TrustProxyHeaders), nil
 	default:
 		return "", fmt.Errorf("unknown field server.%s", field)
 	}

@@ -59,6 +59,9 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if cfg.AllowEvaluate {
 		t.Errorf("default AllowEvaluate = %v, want false", cfg.AllowEvaluate)
 	}
+	if cfg.TrustProxyHeaders {
+		t.Errorf("default TrustProxyHeaders = %v, want false", cfg.TrustProxyHeaders)
+	}
 	if len(cfg.DownloadAllowedDomains) != 0 {
 		t.Errorf("default DownloadAllowedDomains = %v, want empty list", cfg.DownloadAllowedDomains)
 	}
@@ -387,6 +390,27 @@ func TestApplyFileConfigToRuntime_ClampsTransferLimits(t *testing.T) {
 	}
 	if cfg.UploadMaxTotalBytes != MaxUploadMaxTotalBytes {
 		t.Fatalf("UploadMaxTotalBytes = %d, want %d", cfg.UploadMaxTotalBytes, MaxUploadMaxTotalBytes)
+	}
+}
+
+func TestApplyFileConfigToRuntime_TrustProxyHeaders(t *testing.T) {
+	cfg := &RuntimeConfig{}
+	if cfg.TrustProxyHeaders {
+		t.Fatal("expected default TrustProxyHeaders to be false")
+	}
+
+	enabled := true
+	fc := &FileConfig{Server: ServerConfig{TrustProxyHeaders: &enabled}}
+	applyFileConfig(cfg, fc)
+	if !cfg.TrustProxyHeaders {
+		t.Fatal("expected TrustProxyHeaders to be true after apply")
+	}
+
+	disabled := false
+	fc2 := &FileConfig{Server: ServerConfig{TrustProxyHeaders: &disabled}}
+	applyFileConfig(cfg, fc2)
+	if cfg.TrustProxyHeaders {
+		t.Fatal("expected TrustProxyHeaders to be false after apply with false")
 	}
 }
 
