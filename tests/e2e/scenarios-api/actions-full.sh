@@ -246,3 +246,81 @@ pt_post /action '{"kind":"click","ref":"e0","tabId":"nonexistent_xyz_999"}'
 assert_not_ok "rejects bad tab"
 
 end_test
+
+# ─────────────────────────────────────────────────────────────────
+# POST /dialog — JavaScript dialog handling
+# ─────────────────────────────────────────────────────────────────
+
+start_test "POST /dialog: invalid JSON"
+
+pt_post_raw /dialog "not json"
+assert_http_status "400" "rejects invalid JSON"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "POST /dialog: missing action"
+
+pt_post /dialog '{}'
+assert_http_status "400" "rejects missing action"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "POST /dialog: invalid action"
+
+pt_post /dialog '{"action":"invalid"}'
+assert_http_status "400" "rejects invalid action"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "POST /dialog: no pending dialog"
+
+# Navigate to a page that has no dialog
+pt_post /navigate "{\"url\":\"${FIXTURES_URL}/buttons.html\"}"
+assert_ok "navigate"
+sleep 0.5
+
+# Try to accept a dialog when none is pending
+pt_post /dialog '{"action":"accept"}'
+# Should fail because no dialog is pending
+assert_http_status "400" "rejects when no dialog pending"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "POST /dialog: accept action format"
+
+# This test verifies the request format is accepted
+# Note: Actually triggering and accepting a dialog requires JS execution
+# which may not be enabled in all test configurations
+
+pt_post /navigate "{\"url\":\"${FIXTURES_URL}/buttons.html\"}"
+TAB_ID=$(get_tab_id)
+
+# Try accept with tabId - should fail gracefully if no dialog
+pt_post /dialog "{\"action\":\"accept\",\"tabId\":\"${TAB_ID}\"}"
+# Expected: 400 (no pending dialog) - this confirms the endpoint works
+assert_http_status "400" "accept request format valid (no pending dialog)"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "POST /dialog: dismiss action format"
+
+# Try dismiss with text - should fail gracefully if no dialog
+pt_post /dialog "{\"action\":\"dismiss\",\"tabId\":\"${TAB_ID}\"}"
+assert_http_status "400" "dismiss request format valid (no pending dialog)"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "POST /dialog: accept with prompt text"
+
+# Test the prompt text parameter format
+pt_post /dialog "{\"action\":\"accept\",\"tabId\":\"${TAB_ID}\",\"text\":\"my response\"}"
+# Should fail because no dialog is pending, but format is valid
+assert_http_status "400" "accept with text format valid (no pending dialog)"
+
+end_test

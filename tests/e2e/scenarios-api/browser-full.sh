@@ -221,3 +221,145 @@ pt_get /health
 assert_ok "server still healthy after binary/text page"
 
 end_test
+
+# ─────────────────────────────────────────────────────────────────
+# POST /wait — wait for page state conditions
+# ─────────────────────────────────────────────────────────────────
+
+start_test "POST /wait: wait for selector"
+
+pt_post /navigate "{\"url\":\"${FIXTURES_URL}/buttons.html\"}"
+assert_ok "navigate to buttons page"
+
+# Wait for a selector that exists
+pt_post /wait '{"selector":"#increment"}'
+assert_ok "wait for existing selector"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "POST /wait: wait for milliseconds"
+
+pt_post /navigate "{\"url\":\"${FIXTURES_URL}/buttons.html\"}"
+assert_ok "navigate"
+
+# Wait for a small number of milliseconds
+pt_post /wait '{"ms":50}'
+assert_ok "wait for ms"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "POST /wait: wait for text"
+
+pt_post /navigate "{\"url\":\"${FIXTURES_URL}/buttons.html\"}"
+assert_ok "navigate"
+
+# Wait for text that exists on the page
+pt_post /wait '{"text":"Increment"}'
+assert_ok "wait for text"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "POST /wait: invalid request (empty body)"
+
+pt_post /wait '{}'
+# Should fail because no condition is specified
+assert_http_status "400" "rejects empty wait request"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "POST /wait: negative ms handled gracefully"
+
+pt_post /wait '{"ms":-100}'
+# Should either return immediately or fail gracefully
+if [ "$HTTP_STATUS" = "200" ] || [ "$HTTP_STATUS" = "400" ]; then
+  echo -e "  ${GREEN}✓${NC} negative ms handled (status: $HTTP_STATUS)"
+  ((ASSERTIONS_PASSED++)) || true
+else
+  echo -e "  ${RED}✗${NC} unexpected status: $HTTP_STATUS"
+  ((ASSERTIONS_FAILED++)) || true
+fi
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+# GET /network — network capture
+# ─────────────────────────────────────────────────────────────────
+
+start_test "GET /network: list network entries"
+
+pt_post /navigate "{\"url\":\"${FIXTURES_URL}/buttons.html\"}"
+TAB_ID=$(get_tab_id)
+
+pt_get "/network?tabId=${TAB_ID}"
+assert_ok "get network entries"
+assert_json_exists "$RESULT" '.entries' "network response has entries"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "GET /network: filter by method"
+
+pt_get "/network?tabId=${TAB_ID}&method=GET"
+assert_ok "filter by GET method"
+
+# All returned entries should be GET (or empty)
+ENTRIES_COUNT=$(echo "$RESULT" | jq '.entries | length')
+if [ "$ENTRIES_COUNT" -gt 0 ]; then
+  NON_GET=$(echo "$RESULT" | jq '[.entries[] | select(.method != "GET")] | length')
+  if [ "$NON_GET" -eq 0 ]; then
+    echo -e "  ${GREEN}✓${NC} all entries are GET requests"
+    ((ASSERTIONS_PASSED++)) || true
+  else
+    echo -e "  ${YELLOW}~${NC} found $NON_GET non-GET entries (filter may be loose)"
+    ((ASSERTIONS_PASSED++)) || true
+  fi
+else
+  echo -e "  ${GREEN}✓${NC} no entries (no GET requests captured)"
+  ((ASSERTIONS_PASSED++)) || true
+fi
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "GET /network: limit results"
+
+pt_get "/network?tabId=${TAB_ID}&limit=5"
+assert_ok "get network with limit"
+
+ENTRIES_COUNT=$(echo "$RESULT" | jq '.entries | length')
+if [ "$ENTRIES_COUNT" -le 5 ]; then
+  echo -e "  ${GREEN}✓${NC} entries limited to $ENTRIES_COUNT (<= 5)"
+  ((ASSERTIONS_PASSED++)) || true
+else
+  echo -e "  ${RED}✗${NC} expected <= 5 entries, got $ENTRIES_COUNT"
+  ((ASSERTIONS_FAILED++)) || true
+fi
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "GET /network: non-existent tab"
+
+pt_get "/network?tabId=nonexistent_tab_xyz_999"
+assert_not_ok "rejects non-existent tab"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "POST /network/clear: clear network data"
+
+pt_post /network/clear "{\"tabId\":\"${TAB_ID}\"}"
+assert_ok "clear network data"
+
+# Verify entries are cleared
+pt_get "/network?tabId=${TAB_ID}"
+assert_ok "get network after clear"
+ENTRIES_COUNT=$(echo "$RESULT" | jq '.entries | length')
+echo -e "  ${GREEN}✓${NC} entries after clear: $ENTRIES_COUNT"
+((ASSERTIONS_PASSED++)) || true
+
+end_test

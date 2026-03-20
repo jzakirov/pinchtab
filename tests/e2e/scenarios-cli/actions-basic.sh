@@ -69,3 +69,35 @@ pt select e0 "option1" 2>/dev/null
 echo -e "  ${GREEN}✓${NC} select command executed"
 ((ASSERTIONS_PASSED++)) || true
 end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "pinchtab focus <ref>"
+
+pt_ok nav "${FIXTURES_URL}/form.html"
+pt_ok snap
+
+USERNAME_REF=$(find_ref_by_name "Username:" "$PT_OUT")
+if assert_ref_found "$USERNAME_REF" "username input ref"; then
+  pt_ok focus "$USERNAME_REF"
+  assert_output_contains "focused" "confirms focus action"
+
+  # Verify the element is now focused
+  pt_ok eval "document.activeElement.id"
+  assert_json_field ".result" "username" "username input is focused"
+fi
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "pinchtab focus --css <selector>"
+
+pt_ok nav "${FIXTURES_URL}/form.html"
+
+pt_ok focus --css "#email"
+assert_output_contains "focused" "confirms focus by CSS selector"
+
+# Verify the element is now focused
+pt_ok eval "document.activeElement.id"
+assert_json_field ".result" "email" "email input is focused"
+
+end_test

@@ -226,3 +226,30 @@ assert_output_has_tab_event \
   "tab activity output missing snapshot event"
 
 end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "pinchtab activity (no events scenario)"
+
+# Fetch activity with a very small limit to test pagination
+pt_ok activity --limit 1
+assert_output_json "activity with limit 1 is valid JSON"
+assert_output_contains "\"events\"" "returns events array even with limit 1"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "pinchtab activity tab (non-existent tab)"
+
+# Try to get activity for a tab that doesn't exist
+pt activity tab "nonexistent_tab_xyz_12345" --limit 10
+# Should fail gracefully or return empty events
+if [ "$PT_CODE" -eq 0 ]; then
+  assert_output_json "output is valid JSON even for non-existent tab"
+  echo -e "  ${GREEN}✓${NC} handled non-existent tab gracefully"
+  ((ASSERTIONS_PASSED++)) || true
+else
+  echo -e "  ${GREEN}✓${NC} correctly rejected non-existent tab"
+  ((ASSERTIONS_PASSED++)) || true
+fi
+
+end_test

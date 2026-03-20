@@ -57,3 +57,78 @@ pt_ok snap
 pt_ok hover e0
 
 end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "pinchtab keydown/keyup (hold and release)"
+
+pt_ok nav "${FIXTURES_URL}/form.html"
+pt_ok click --css "#username"
+
+# Hold Shift key down
+pt_ok keydown Shift
+assert_output_contains "keydown" "keydown response"
+assert_output_contains "Shift" "keydown key name"
+
+# Release Shift key
+pt_ok keyup Shift
+assert_output_contains "keyup" "keyup response"
+assert_output_contains "Shift" "keyup key name"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "pinchtab keyboard type <text>"
+
+pt_ok nav "${FIXTURES_URL}/form.html"
+pt_ok click --css "#username"
+
+# Use keyboard type to simulate keystrokes
+pt_ok keyboard type "hello123"
+assert_output_contains "typed" "keyboard type response"
+
+# Verify the text was actually typed into the input
+pt_ok eval "document.querySelector('#username').value"
+assert_output_contains "hello123" "keyboard type value persisted"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "pinchtab keyboard inserttext <text>"
+
+pt_ok nav "${FIXTURES_URL}/form.html"
+pt_ok click --css "#email"
+
+# Use keyboard inserttext (paste-like, no key events)
+pt_ok keyboard inserttext "test@example.com"
+assert_output_contains "inserted" "keyboard inserttext response"
+
+# Verify the text was actually inserted
+pt_ok eval "document.querySelector('#email').value"
+assert_output_contains "test@example.com" "keyboard inserttext value persisted"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "pinchtab keyboard type vs inserttext difference"
+
+# This test verifies that keyboard type triggers key events
+# while inserttext does not (paste-like behavior)
+
+pt_ok nav "${FIXTURES_URL}/form.html"
+
+# Type into username using keyboard type (triggers keydown/keypress/keyup)
+pt_ok click --css "#username"
+pt_ok keyboard type "ABC"
+
+# Insert into email using keyboard inserttext (no key events)
+pt_ok click --css "#email"
+pt_ok keyboard inserttext "XYZ"
+
+# Both should have values
+pt_ok eval "document.querySelector('#username').value"
+assert_output_contains "ABC" "keyboard type value present"
+
+pt_ok eval "document.querySelector('#email').value"
+assert_output_contains "XYZ" "keyboard inserttext value present"
+
+end_test
