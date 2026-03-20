@@ -9,10 +9,12 @@ import (
 
 	cdp "github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/page"
+	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/ids"
+	internalurls "github.com/pinchtab/pinchtab/internal/urls"
 )
 
 type TabSetupFunc func(ctx context.Context)
@@ -26,13 +28,14 @@ type TabManager struct {
 	snapshots  map[string]*RefCache
 	onTabSetup TabSetupFunc
 	dialogMgr  *DialogManager
+	logStore   *ConsoleLogStore
 	currentTab string // ID of the most recently used tab
 	executor   *TabExecutor
 	guardOnce  sync.Once
 	mu         sync.RWMutex
 }
 
-func NewTabManager(browserCtx context.Context, cfg *config.RuntimeConfig, idMgr *ids.Manager, onTabSetup TabSetupFunc) *TabManager {
+func NewTabManager(browserCtx context.Context, cfg *config.RuntimeConfig, idMgr *ids.Manager, logStore *ConsoleLogStore, onTabSetup TabSetupFunc) *TabManager {
 	if idMgr == nil {
 		idMgr = ids.NewManager()
 	}
@@ -48,6 +51,7 @@ func NewTabManager(browserCtx context.Context, cfg *config.RuntimeConfig, idMgr 
 		accessed:   make(map[string]bool),
 		snapshots:  make(map[string]*RefCache),
 		onTabSetup: onTabSetup,
+		logStore:   logStore,
 		executor:   NewTabExecutor(maxParallel),
 	}
 }
@@ -93,13 +97,14 @@ func (tm *TabManager) StartBrowserGuards() {
 func (tm *TabManager) closePopupTarget(targetID, openerID target.ID, url string) {
 	closeCtx, cancel := context.WithTimeout(tm.browserCtx, 5*time.Second)
 	defer cancel()
+	logURL := internalurls.RedactForLog(url)
 
 	if err := target.CloseTarget(targetID).Do(cdp.WithExecutor(closeCtx, chromedp.FromContext(closeCtx).Browser)); err != nil {
-		slog.Debug("popup close failed", "targetId", targetID, "openerId", openerID, "url", url, "err", err)
+		slog.Debug("popup close failed", "targetId", targetID, "openerId", openerID, "url", logURL, "err", err)
 		return
 	}
 
-	slog.Info("blocked popup target", "targetId", targetID, "openerId", openerID, "url", url)
+	slog.Info("blocked popup target", "targetId", targetID, "openerId", openerID, "url", logURL)
 }
 
 func (tm *TabManager) markAccessed(tabID string) {
@@ -351,6 +356,9 @@ func (tm *TabManager) CreateTab(url string) (string, context.Context, context.Ca
 		ListenDialogEvents(ctx, tabID, tm.dialogMgr, autoAccept)
 	}
 
+	// Set up console and error log capturing
+	tm.setupConsoleCapture(ctx, rawCDPID)
+
 	tm.mu.Lock()
 	tm.tabs[tabID] = &TabEntry{Ctx: ctx, Cancel: cancel, CDPID: rawCDPID, CreatedAt: now, LastUsed: now}
 	tm.accessed[tabID] = true
@@ -395,16 +403,7 @@ func (tm *TabManager) CloseTab(tabID string) error {
 		}
 		slog.Debug("close target CDP", "tabId", tabID, "cdpId", cdpTargetID, "err", err)
 	}
-
-	tm.mu.Lock()
-	delete(tm.tabs, tabID)
-	delete(tm.snapshots, tabID)
-	tm.mu.Unlock()
-
-	// Clean up executor per-tab mutex
-	if tm.executor != nil {
-		tm.executor.RemoveTab(tabID)
-	}
+	tm.purgeTrackedTabState(tabID, cdpTargetID)
 
 	return nil
 }
@@ -580,28 +579,169 @@ func (tm *TabManager) CleanStaleTabs(ctx context.Context, interval time.Duration
 			alive[string(t.TargetID)] = true
 		}
 
-		// Collect stale tab IDs while holding the lock, then clean up
-		// executor mutexes outside the lock to avoid blocking TabManager
-		// operations if RemoveTab has to wait for an in-flight task.
-		var staleIDs []string
-		tm.mu.Lock()
+		type staleTab struct {
+			tabID string
+			cdpID string
+		}
+		var staleTabs []staleTab
+		tm.mu.RLock()
 		for id, entry := range tm.tabs {
 			if !alive[id] {
-				if entry.Cancel != nil {
-					entry.Cancel()
+				cdpID := entry.CDPID
+				if cdpID == "" {
+					cdpID = id
 				}
-				delete(tm.tabs, id)
-				delete(tm.snapshots, id)
-				staleIDs = append(staleIDs, id)
-				slog.Info("cleaned stale tab", "id", id)
+				staleTabs = append(staleTabs, staleTab{tabID: id, cdpID: cdpID})
 			}
 		}
-		tm.mu.Unlock()
+		tm.mu.RUnlock()
 
-		if tm.executor != nil {
-			for _, id := range staleIDs {
-				tm.executor.RemoveTab(id)
-			}
+		for _, stale := range staleTabs {
+			tm.purgeTrackedTabState(stale.tabID, stale.cdpID)
+			slog.Info("cleaned stale tab", "id", stale.tabID)
 		}
 	}
+}
+
+func (tm *TabManager) purgeTrackedTabState(tabID, cdpTargetID string) bool {
+	resolvedTabID, resolvedCDPID, cancel, ok := tm.lookupTrackedTabForCleanup(tabID, cdpTargetID)
+	if !ok {
+		return false
+	}
+	if cancel != nil {
+		cancel()
+	}
+
+	tm.mu.Lock()
+	delete(tm.tabs, resolvedTabID)
+	delete(tm.snapshots, resolvedTabID)
+	delete(tm.accessed, resolvedTabID)
+	if tm.currentTab == resolvedTabID {
+		tm.currentTab = ""
+	}
+	tm.mu.Unlock()
+
+	if tm.dialogMgr != nil {
+		tm.dialogMgr.ClearPending(resolvedTabID)
+	}
+	if tm.executor != nil {
+		tm.executor.RemoveTab(resolvedTabID)
+	}
+	if tm.logStore != nil {
+		tm.logStore.RemoveTab(resolvedCDPID)
+	}
+	return true
+}
+
+func (tm *TabManager) lookupTrackedTabForCleanup(tabID, cdpTargetID string) (string, string, context.CancelFunc, bool) {
+	tm.mu.RLock()
+	defer tm.mu.RUnlock()
+
+	if tabID != "" {
+		if entry, ok := tm.tabs[tabID]; ok {
+			resolvedCDPID := cdpTargetID
+			if resolvedCDPID == "" {
+				resolvedCDPID = entry.CDPID
+			}
+			if resolvedCDPID == "" {
+				resolvedCDPID = tabID
+			}
+			return tabID, resolvedCDPID, entry.Cancel, true
+		}
+	}
+
+	if cdpTargetID == "" {
+		return "", "", nil, false
+	}
+
+	for id, entry := range tm.tabs {
+		resolvedCDPID := entry.CDPID
+		if resolvedCDPID == "" {
+			resolvedCDPID = id
+		}
+		if id == cdpTargetID || resolvedCDPID == cdpTargetID {
+			return id, resolvedCDPID, entry.Cancel, true
+		}
+	}
+	return "", "", nil, false
+}
+
+func (tm *TabManager) purgeTrackedTabStateByTargetID(cdpTargetID string) bool {
+	return tm.purgeTrackedTabState("", cdpTargetID)
+}
+
+// setupConsoleCapture enables runtime domain and listens for console/exception events.
+func (tm *TabManager) setupConsoleCapture(ctx context.Context, rawCDPID string) {
+	if tm.logStore == nil {
+		return
+	}
+
+	// Listen for console API calls and exceptions
+	chromedp.ListenTarget(ctx, func(ev any) {
+		switch ev := ev.(type) {
+		case *runtime.EventConsoleAPICalled:
+			var msg string
+			for _, arg := range ev.Args {
+				if len(arg.Value) > 0 {
+					// arg.Value is jsontext.Value ([]byte), use as string directly
+					// Strip quotes if it's a JSON string
+					val := string(arg.Value)
+					if len(val) >= 2 && val[0] == '"' && val[len(val)-1] == '"' {
+						val = val[1 : len(val)-1]
+					}
+					msg += val
+				} else if arg.Description != "" {
+					msg += arg.Description
+				}
+				msg += " "
+			}
+
+			var ts time.Time
+			if ev.Timestamp != nil {
+				ts = time.Time(*ev.Timestamp)
+			} else {
+				ts = time.Now()
+			}
+
+			tm.logStore.AddConsoleLog(rawCDPID, LogEntry{
+				Timestamp: ts,
+				Level:     string(ev.Type),
+				Message:   msg,
+			})
+
+		case *runtime.EventExceptionThrown:
+			msg := ev.ExceptionDetails.Text
+			if ev.ExceptionDetails.Exception != nil && ev.ExceptionDetails.Exception.Description != "" {
+				msg += ": " + ev.ExceptionDetails.Exception.Description
+			}
+
+			var ts time.Time
+			if ev.Timestamp != nil {
+				ts = time.Time(*ev.Timestamp)
+			} else {
+				ts = time.Now()
+			}
+
+			stack := ""
+			if ev.ExceptionDetails.Exception != nil {
+				stack = ev.ExceptionDetails.Exception.Description
+			}
+
+			tm.logStore.AddErrorLog(rawCDPID, ErrorEntry{
+				Timestamp: ts,
+				Message:   msg,
+				URL:       ev.ExceptionDetails.URL,
+				Line:      ev.ExceptionDetails.LineNumber,
+				Column:    ev.ExceptionDetails.ColumnNumber,
+				Stack:     stack,
+			})
+		}
+	})
+
+	// Enable runtime domain to receive console/exception events
+	go func() {
+		_ = chromedp.Run(ctx, chromedp.ActionFunc(func(c context.Context) error {
+			return runtime.Enable().Do(c)
+		}))
+	}()
 }
