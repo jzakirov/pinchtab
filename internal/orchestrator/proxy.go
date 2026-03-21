@@ -305,6 +305,30 @@ func classifyLaunchError(err error) int {
 	return 500 // Internal Server Error
 }
 
+// ProxyToFirst proxies the request to the first running instance with proper
+// auth rewriting. Unlike bare proxy.HTTP, this applies the instance's auth
+// token so the bridge sees a valid Bearer header instead of the dashboard's
+// cookie (which fails the bridge's origin check).
+func (o *Orchestrator) ProxyToFirst(w http.ResponseWriter, r *http.Request, path string) {
+	targetBase := o.FirstRunningURL()
+	if targetBase == "" {
+		httpx.Error(w, 503, fmt.Errorf("no running instances"))
+		return
+	}
+
+	parsed, err := url.Parse(targetBase)
+	if err != nil {
+		httpx.Error(w, 502, fmt.Errorf("invalid instance URL: %w", err))
+		return
+	}
+	parsed.Path = path
+	if r.URL.RawQuery != "" {
+		parsed.RawQuery = r.URL.RawQuery
+	}
+
+	o.proxyToURL(w, r, parsed)
+}
+
 func (o *Orchestrator) singleRunningInstance() *InstanceInternal {
 	o.mu.RLock()
 	defer o.mu.RUnlock()
