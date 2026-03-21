@@ -210,7 +210,7 @@ export async function fetchTabPdf(tabId: string): Promise<Blob> {
 }
 
 export async function closeTab(tabId: string): Promise<void> {
-  await request(`/tabs/${encodeURIComponent(tabId)}`, { method: "DELETE" });
+  await request(`/tabs/${encodeURIComponent(tabId)}/close`, { method: "POST" });
 }
 
 export async function navigateTab(

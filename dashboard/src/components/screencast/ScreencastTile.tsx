@@ -84,13 +84,48 @@ export default function ScreencastTile({
           tabId,
           x: Math.round(coords.x),
           y: Math.round(coords.y),
-          deltaY: Math.round(e.deltaY),
+          scrollY: Math.round(e.deltaY),
         });
       } catch (err) {
         console.error("scroll failed", err);
       }
     },
     [status, tabId, getPageCoords],
+  );
+
+  const handleKeyDown = useCallback(
+    async (e: React.KeyboardEvent<HTMLCanvasElement>) => {
+      if (status !== "streaming") return;
+      if ((e.ctrlKey || e.metaKey) && e.key === "v") {
+        e.preventDefault();
+        navigator.clipboard
+          .readText()
+          .then((text) => {
+            if (text) {
+              api
+                .sendAction({ kind: "keyboard-inserttext", tabId, text })
+                .catch(() => {});
+            }
+          })
+          .catch(() => {});
+        return;
+      }
+      e.preventDefault();
+      try {
+        if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+          await api.sendAction({
+            kind: "keyboard-inserttext",
+            tabId,
+            text: e.key,
+          });
+        } else {
+          await api.sendAction({ kind: "press", tabId, key: e.key });
+        }
+      } catch (err) {
+        console.error("key input failed", err);
+      }
+    },
+    [status, tabId],
   );
 
   // Prevent default wheel behavior on the canvas so the page doesn't scroll
@@ -274,10 +309,12 @@ export default function ScreencastTile({
           <canvas
             ref={canvasRef}
             className="max-h-full max-w-full cursor-pointer object-contain"
+            tabIndex={0}
             width={800}
             height={600}
             onClick={handleCanvasClick}
             onWheel={handleCanvasWheel}
+            onKeyDown={handleKeyDown}
           />
         )}
 
