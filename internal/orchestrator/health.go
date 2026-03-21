@@ -15,6 +15,8 @@ const (
 	instanceStartupTimeout     = 45 * time.Second
 )
 
+var attachedBridgeHealthPollInterval = 60 * time.Second
+
 func (o *Orchestrator) monitor(inst *InstanceInternal) {
 	healthy := false
 	exitedEarly := false
@@ -37,32 +39,7 @@ func (o *Orchestrator) monitor(inst *InstanceInternal) {
 		}
 		time.Sleep(instanceHealthPollInterval)
 
-		for _, baseURL := range instanceBaseURLs(inst.URL, inst.Port) {
-			baseParsed, parseErr := url.Parse(baseURL)
-			if parseErr != nil {
-				lastProbe = fmt.Sprintf("%s -> %s", baseURL, parseErr.Error())
-				continue
-			}
-			target := &url.URL{Scheme: baseParsed.Scheme, Host: baseParsed.Host, Path: "/health"}
-			req, reqErr := http.NewRequest(http.MethodGet, target.String(), nil)
-			if reqErr != nil {
-				lastProbe = fmt.Sprintf("%s -> %s", baseURL, reqErr.Error())
-				continue
-			}
-			o.applyInstanceAuth(req, inst)
-			resp, err := o.client.Do(req)
-			if err == nil {
-				_ = resp.Body.Close()
-				lastProbe = fmt.Sprintf("%s -> HTTP %d", baseURL, resp.StatusCode)
-				if isInstanceHealthyStatus(resp.StatusCode) {
-					healthy = true
-					resolvedURL = baseURL
-					break
-				}
-			} else {
-				lastProbe = fmt.Sprintf("%s -> %s", baseURL, err.Error())
-			}
-		}
+		healthy, resolvedURL, lastProbe = o.probeInstanceHealth(inst)
 		if healthy {
 			break
 		}
@@ -125,6 +102,68 @@ func (o *Orchestrator) monitor(inst *InstanceInternal) {
 		o.emitEvent("instance.stopped", &instCopy)
 	}
 	slog.Info("instance exited", "id", inst.ID)
+}
+
+func (o *Orchestrator) monitorAttachedBridge(inst *InstanceInternal) {
+	ticker := time.NewTicker(attachedBridgeHealthPollInterval)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		o.mu.RLock()
+		current, ok := o.instances[inst.ID]
+		shouldStop := !ok || current != inst || inst.Status != "running" || !inst.Attached || inst.AttachType != "bridge"
+		o.mu.RUnlock()
+		if shouldStop {
+			return
+		}
+
+		healthy, resolvedURL, lastProbe := o.probeInstanceHealth(inst)
+		if healthy {
+			if resolvedURL != "" && resolvedURL != inst.URL {
+				o.mu.Lock()
+				if current, ok := o.instances[inst.ID]; ok && current == inst {
+					inst.URL = resolvedURL
+					inst.Instance.URL = resolvedURL
+					o.syncInstanceToManager(&inst.Instance)
+				}
+				o.mu.Unlock()
+			}
+			continue
+		}
+
+		slog.Warn("attached bridge unreachable, removing", "id", inst.ID, "probe", lastProbe)
+		o.markStopped(inst.ID)
+		return
+	}
+}
+
+func (o *Orchestrator) probeInstanceHealth(inst *InstanceInternal) (bool, string, string) {
+	lastProbe := "no response"
+	for _, baseURL := range instanceBaseURLs(inst.URL, inst.Port) {
+		baseParsed, parseErr := url.Parse(baseURL)
+		if parseErr != nil {
+			lastProbe = fmt.Sprintf("%s -> %s", baseURL, parseErr.Error())
+			continue
+		}
+		target := &url.URL{Scheme: baseParsed.Scheme, Host: baseParsed.Host, Path: "/health"}
+		req, reqErr := http.NewRequest(http.MethodGet, target.String(), nil)
+		if reqErr != nil {
+			lastProbe = fmt.Sprintf("%s -> %s", baseURL, reqErr.Error())
+			continue
+		}
+		o.applyInstanceAuth(req, inst)
+		resp, err := o.client.Do(req)
+		if err != nil {
+			lastProbe = fmt.Sprintf("%s -> %s", baseURL, err.Error())
+			continue
+		}
+		_ = resp.Body.Close()
+		lastProbe = fmt.Sprintf("%s -> HTTP %d", baseURL, resp.StatusCode)
+		if isInstanceHealthyStatus(resp.StatusCode) {
+			return true, baseURL, lastProbe
+		}
+	}
+	return false, "", lastProbe
 }
 
 type remoteTab struct {

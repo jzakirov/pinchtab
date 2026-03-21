@@ -5,7 +5,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
@@ -254,6 +256,45 @@ func TestOrchestrator_AttachBridge(t *testing.T) {
 	if inst.CdpURL != "" {
 		t.Fatalf("CdpURL = %q, want empty", inst.CdpURL)
 	}
+}
+
+func TestOrchestrator_AttachBridge_RemovesUnhealthyBridge(t *testing.T) {
+	var unhealthy atomic.Bool
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/health" {
+			t.Fatalf("path = %q, want /health", r.URL.Path)
+		}
+		if unhealthy.Load() {
+			http.Error(w, "unhealthy", http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer backend.Close()
+
+	oldPollInterval := attachedBridgeHealthPollInterval
+	attachedBridgeHealthPollInterval = 10 * time.Millisecond
+	defer func() { attachedBridgeHealthPollInterval = oldPollInterval }()
+
+	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	o.client = backend.Client()
+
+	inst, err := o.AttachBridge("bridge1", backend.URL, "bridge-token")
+	if err != nil {
+		t.Fatalf("AttachBridge failed: %v", err)
+	}
+
+	unhealthy.Store(true)
+
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		if len(o.List()) == 0 {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	t.Fatalf("instance %q was not removed after bridge health checks failed", inst.ID)
 }
 
 func TestValidateAttachURL_AllowsBridgeHTTP(t *testing.T) {
