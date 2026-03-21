@@ -144,6 +144,9 @@ func setupAllocator(cfg *config.RuntimeConfig, hooks Hooks) (context.Context, co
 		opts = append(opts, chromedp.Flag("tz", cfg.Timezone))
 	}
 
+	if proxyURL := os.Getenv("PINCHTAB_CHROME_PROXY"); proxyURL != "" {
+		opts = append(opts, chromedp.ProxyServer(proxyURL))
+	}
 	if cfg.ChromeExtraFlags != "" {
 		for _, f := range strings.Fields(cfg.ChromeExtraFlags) {
 			opts = appendExecAllocatorFlag(opts, f)
