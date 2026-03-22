@@ -38,7 +38,7 @@ func (o *Orchestrator) monitor(inst *InstanceInternal) {
 		}
 		time.Sleep(instanceHealthPollInterval)
 
-		healthy, resolvedURL, lastProbe = o.probeInstanceHealth(inst)
+		healthy, resolvedURL, lastProbe = o.probeInstanceHealth(inst, inst.URL, inst.Port)
 		if healthy {
 			break
 		}
@@ -107,9 +107,14 @@ func (o *Orchestrator) monitorAttachedBridge(inst *InstanceInternal) {
 	ticker := time.NewTicker(attachedBridgeHealthPollInterval)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		if !o.checkAttachedBridgeHealth(inst) {
+	for {
+		select {
+		case <-o.done:
 			return
+		case <-ticker.C:
+			if !o.checkAttachedBridgeHealth(inst) {
+				return
+			}
 		}
 	}
 }
@@ -118,14 +123,16 @@ func (o *Orchestrator) checkAttachedBridgeHealth(inst *InstanceInternal) bool {
 	o.mu.RLock()
 	current, ok := o.instances[inst.ID]
 	shouldStop := !ok || current != inst || inst.Status != "running" || !inst.Attached || inst.AttachType != "bridge"
+	instURL := inst.URL
+	port := inst.Port
 	o.mu.RUnlock()
 	if shouldStop {
 		return false
 	}
 
-	healthy, resolvedURL, lastProbe := o.probeInstanceHealth(inst)
+	healthy, resolvedURL, lastProbe := o.probeInstanceHealth(inst, instURL, port)
 	if healthy {
-		if resolvedURL != "" && resolvedURL != inst.URL {
+		if resolvedURL != "" && resolvedURL != instURL {
 			o.mu.Lock()
 			if current, ok := o.instances[inst.ID]; ok && current == inst {
 				inst.URL = resolvedURL
@@ -142,9 +149,9 @@ func (o *Orchestrator) checkAttachedBridgeHealth(inst *InstanceInternal) bool {
 	return false
 }
 
-func (o *Orchestrator) probeInstanceHealth(inst *InstanceInternal) (bool, string, string) {
+func (o *Orchestrator) probeInstanceHealth(inst *InstanceInternal, instURL, port string) (bool, string, string) {
 	lastProbe := "no response"
-	for _, baseURL := range instanceBaseURLs(inst.URL, inst.Port) {
+	for _, baseURL := range instanceBaseURLs(instURL, port) {
 		baseParsed, parseErr := url.Parse(baseURL)
 		if parseErr != nil {
 			lastProbe = fmt.Sprintf("%s -> %s", baseURL, parseErr.Error())

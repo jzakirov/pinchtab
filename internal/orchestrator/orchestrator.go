@@ -49,6 +49,8 @@ type Orchestrator struct {
 	eventHandlers  []EventHandler
 	instanceMgr    *instance.Manager
 	runtimeCfg     *config.RuntimeConfig
+	done           chan struct{}
+	closeOnce      sync.Once
 }
 
 // OnEvent adds an event handler for instance lifecycle events.
@@ -136,6 +138,7 @@ func NewOrchestratorWithRunner(baseDir string, runner HostRunner) *Orchestrator 
 		allowEvaluate:  false,
 		portAllocator:  NewPortAllocator(9868, 9968),
 		idMgr:          ids.NewManager(),
+		done:           make(chan struct{}),
 	}
 
 	bridgeClient := instance.NewBridgeClient()
@@ -759,6 +762,8 @@ func (o *Orchestrator) ScreencastURL(instanceID, tabID string) string {
 }
 
 func (o *Orchestrator) Shutdown() {
+	o.closeOnce.Do(func() { close(o.done) })
+
 	o.mu.RLock()
 	ids := make([]string, 0, len(o.instances))
 	for id, inst := range o.instances {
@@ -783,6 +788,8 @@ func (o *Orchestrator) Shutdown() {
 }
 
 func (o *Orchestrator) ForceShutdown() {
+	o.closeOnce.Do(func() { close(o.done) })
+
 	o.mu.RLock()
 	instances := make([]*InstanceInternal, 0, len(o.instances))
 	for _, inst := range o.instances {
