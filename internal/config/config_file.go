@@ -486,6 +486,9 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 				RetentionDays:  &activityRetentionDays,
 			},
 		},
+		Vnc: VncFileConfig{
+			ClientParams: cfg.VncClientParams,
+		},
 	}
 
 	return fc

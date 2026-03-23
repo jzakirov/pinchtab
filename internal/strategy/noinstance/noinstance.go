@@ -5,12 +5,10 @@ package noinstance
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 
 	"github.com/pinchtab/pinchtab/internal/httpx"
 	"github.com/pinchtab/pinchtab/internal/orchestrator"
-	"github.com/pinchtab/pinchtab/internal/proxy"
 	"github.com/pinchtab/pinchtab/internal/strategy"
 )
 
@@ -63,20 +61,13 @@ func (s *Strategy) RegisterRoutes(mux *http.ServeMux) {
 }
 
 func (s *Strategy) proxyToFirst(w http.ResponseWriter, r *http.Request) {
-	target := s.orch.FirstRunningURL()
-	if target == "" {
-		httpx.Error(w, 503, fmt.Errorf("no remote instances connected — attach a bridge first"))
-		return
-	}
-	strategy.EnrichForTarget(r, s.orch, target)
-	proxy.HTTP(w, r, target+r.URL.Path)
+	s.orch.ProxyToFirst(w, r, r.URL.Path)
 }
 
 func (s *Strategy) handleTabs(w http.ResponseWriter, r *http.Request) {
-	target := s.orch.FirstRunningURL()
-	if target == "" {
+	if s.orch.FirstRunningURL() == "" {
 		httpx.JSON(w, 200, map[string]any{"tabs": []any{}})
 		return
 	}
-	proxy.HTTP(w, r, target+"/tabs")
+	s.orch.ProxyToFirst(w, r, "/tabs")
 }

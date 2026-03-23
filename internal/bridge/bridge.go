@@ -56,6 +56,40 @@ type Bridge struct {
 	tempProfileDir string
 }
 
+func (b *Bridge) resetChromeStateLocked(reason string) {
+	profileDir := ""
+	if b.tempProfileDir != "" {
+		profileDir = b.tempProfileDir
+	} else if b.Config != nil {
+		profileDir = b.Config.ProfileDir
+	}
+
+	if reason != "" {
+		slog.Warn("resetting chrome bridge state", "reason", reason, "profile", profileDir)
+	}
+
+	if b.BrowserCancel != nil {
+		b.BrowserCancel()
+	}
+	if b.AllocCancel != nil {
+		b.AllocCancel()
+	}
+	if profileDir != "" {
+		time.Sleep(200 * time.Millisecond)
+		killed := killChromeByProfileDir(profileDir)
+		if killed > 0 {
+			slog.Warn("killed stale chrome processes during bridge reset", "count", killed, "profile", profileDir)
+		}
+	}
+
+	b.initialized = false
+	b.BrowserCtx = nil
+	b.BrowserCancel = nil
+	b.AllocCtx = nil
+	b.AllocCancel = nil
+	b.TabManager = nil
+}
+
 func New(allocCtx, browserCtx context.Context, cfg *config.RuntimeConfig) *Bridge {
 	idMgr := ids.NewManager()
 	netBufSize := DefaultNetworkBufferSize
@@ -181,26 +215,29 @@ func (b *Bridge) EnsureChrome(cfg *config.RuntimeConfig) error {
 	defer b.initMu.Unlock()
 
 	if b.initialized && b.BrowserCtx != nil {
-		// Check if browser context is still alive
+		// A non-cancelled browser context can still be wedged. Probe the shared
+		// CDP session with a short timeout before declaring the bridge healthy.
 		if b.BrowserCtx.Err() == nil {
-			return nil
+			if b.TabManager == nil {
+				return nil
+			}
+			probeCtx, probeCancel := context.WithTimeout(b.BrowserCtx, 2*time.Second)
+			_, err := b.TabManager.ListTargetsWithContext(probeCtx)
+			probeCancel()
+			if err == nil {
+				return nil
+			}
+			b.resetChromeStateLocked(fmt.Sprintf("chrome probe failed: %v", err))
+		} else {
+			b.resetChromeStateLocked("chrome context cancelled")
 		}
-		// Chrome died — reset state for re-initialization
-		slog.Warn("chrome context cancelled, re-initializing")
-		b.initialized = false
-		b.BrowserCtx = nil
-		b.BrowserCancel = nil
-		b.AllocCtx = nil
-		b.AllocCancel = nil
-		b.TabManager = nil
 	}
 
 	if b.BrowserCtx != nil {
 		if b.BrowserCtx.Err() == nil {
 			return nil
 		}
-		b.BrowserCtx = nil
-		b.BrowserCancel = nil
+		b.resetChromeStateLocked("browser context present without initialized state")
 	}
 
 	slog.Debug("ensure chrome called", "headless", cfg.Headless, "profile", cfg.ProfileDir)

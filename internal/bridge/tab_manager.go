@@ -450,6 +450,10 @@ func (tm *TabManager) ResolveTabByIndex(index int) (string, string, string, erro
 	return tabID, t.URL, t.Title, nil
 }
 
+// listTargetsTimeout is the maximum time ListTargets waits for a CDP response
+// before declaring the browser context stuck.
+const listTargetsTimeout = 5 * time.Second
+
 func (tm *TabManager) ListTargets() ([]*target.Info, error) {
 	if tm == nil {
 		return nil, fmt.Errorf("tab manager not initialized")
@@ -457,8 +461,12 @@ func (tm *TabManager) ListTargets() ([]*target.Info, error) {
 	if tm.browserCtx == nil {
 		return nil, fmt.Errorf("no browser connection")
 	}
+
+	ctx, cancel := context.WithTimeout(tm.browserCtx, listTargetsTimeout)
+	defer cancel()
+
 	var targets []*target.Info
-	if err := chromedp.Run(tm.browserCtx,
+	if err := chromedp.Run(ctx,
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			var err error
 			targets, err = target.GetTargets().Do(ctx)

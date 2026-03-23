@@ -88,6 +88,9 @@ type RuntimeConfig struct {
 
 	// Observability settings
 	Observability ObservabilityConfig
+
+	// VNC client query params appended to KasmVNC redirect URL (dashboard mode only)
+	VncClientParams string
 }
 
 // IDPIConfig holds the configuration for the Indirect Prompt Injection (IDPI)
@@ -136,6 +139,12 @@ type FileConfig struct {
 	Timeouts         TimeoutsConfig          `json:"timeouts,omitempty"`
 	Scheduler        SchedulerFileConfig     `json:"scheduler,omitempty"`
 	Observability    ObservabilityFileConfig `json:"observability,omitempty"`
+	Vnc              VncFileConfig           `json:"vnc,omitempty"`
+}
+
+// VncFileConfig holds KasmVNC proxy settings (dashboard mode only).
+type VncFileConfig struct {
+	ClientParams string `json:"clientParams,omitempty"`
 }
 
 type ServerConfig struct {

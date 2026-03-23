@@ -397,6 +397,11 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	if fc.Scheduler.WorkerCount != nil {
 		cfg.Scheduler.WorkerCount = *fc.Scheduler.WorkerCount
 	}
+
+	// VNC
+	if fc.Vnc.ClientParams != "" {
+		cfg.VncClientParams = fc.Vnc.ClientParams
+	}
 }
 
 // ApplyFileConfigToRuntime merges file configuration into an existing runtime
