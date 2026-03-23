@@ -409,6 +409,43 @@ func TestOrchestrator_AttachBridge(t *testing.T) {
 	}
 }
 
+func TestOrchestrator_AttachBridge_UpsertsExistingBridge(t *testing.T) {
+	runner := &mockRunner{portAvail: true}
+	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+
+	first, err := o.AttachBridge("bridge1", "http://10.0.0.8:9868", "bridge-token-1")
+	if err != nil {
+		t.Fatalf("first AttachBridge failed: %v", err)
+	}
+
+	second, err := o.AttachBridge("bridge1", "http://10.0.0.9:9868", "bridge-token-2")
+	if err != nil {
+		t.Fatalf("second AttachBridge failed: %v", err)
+	}
+
+	if second.ID != first.ID {
+		t.Fatalf("ID = %q, want %q", second.ID, first.ID)
+	}
+	if second.URL != "http://10.0.0.9:9868" {
+		t.Fatalf("URL = %q, want %q", second.URL, "http://10.0.0.9:9868")
+	}
+
+	o.mu.RLock()
+	internal := o.instances[first.ID]
+	o.mu.RUnlock()
+	if internal == nil {
+		t.Fatalf("attached instance %q missing from orchestrator", first.ID)
+	}
+	if internal.authToken != "bridge-token-2" {
+		t.Fatalf("authToken = %q, want %q", internal.authToken, "bridge-token-2")
+	}
+
+	list := o.List()
+	if len(list) != 1 {
+		t.Fatalf("expected 1 instance in list, got %d", len(list))
+	}
+}
+
 func TestOrchestrator_AttachBridge_RemovesUnhealthyBridge(t *testing.T) {
 	unhealthy := false
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
