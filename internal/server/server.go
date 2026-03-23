@@ -192,6 +192,11 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 			),
 		),
 	)
+
+	// VNC proxy: intercepts requests with X-VNC-Proxy header (set by Caddy for vnc.domain).
+	// Must wrap OUTSIDE auth/CSP middleware — VNC uses cookie auth, not API tokens.
+	handler = orchestrator.VncProxyMiddleware(orch, handler)
+
 	cli.LogSecurityWarnings(cfg)
 
 	srv := &http.Server{
